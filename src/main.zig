@@ -19,10 +19,17 @@ pub const ProgramReturn = struct {
     }
 };
 
-pub fn main() void {
+pub fn main() !void {
     var result = ProgramReturn.init();
     var heap_buf: [512 * 1024]u8 = undefined;
     const heap_size = heap_buf.len;
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const aot_file = try std.fs.cwd().readFileAlloc(allocator, "/Users/joe/git/joe-p/wamr-playground/out/wasm-apps/testapp.aot", 4096);
+    defer allocator.free(aot_file);
 
     // Initialize runtime args
     var init_args = std.mem.zeroes(c.RuntimeInitArgs);
@@ -38,6 +45,9 @@ pub fn main() void {
         return;
     }
     defer c.wasm_runtime_destroy();
+
+    const package_type = c.get_package_type(aot_file.ptr, @intCast(aot_file.len));
+    std.debug.print("Package type for file of size {d}: {d}\n", .{ aot_file.len, package_type });
 
     return;
 }
