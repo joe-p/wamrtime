@@ -29,11 +29,11 @@ const native_symbols = [1]c.NativeSymbol{c.NativeSymbol{ .symbol = "ret_1337", .
 const HEAP_SIZE = 2 * 1024 * 1024; // 2 MB
 const STACK_SIZE: u32 = 8092;
 
-pub fn init_runtime(heap_buf: [*]u8) !void {
+pub fn init_runtime(heap_buf: []u8) !void {
     // Initialize runtime args
     var init_args = std.mem.zeroes(c.RuntimeInitArgs);
     init_args.mem_alloc_type = c.Alloc_With_Pool;
-    init_args.mem_alloc_option.pool.heap_buf = heap_buf;
+    init_args.mem_alloc_option.pool.heap_buf = heap_buf.ptr;
 
     init_args.mem_alloc_option.pool.heap_size = @intCast(HEAP_SIZE);
     init_args.running_mode = c.Mode_Interp;
@@ -129,7 +129,7 @@ pub fn run_aot() !ProgramReturn {
     };
     defer allocator.free(heap_buf);
 
-    try init_runtime(heap_buf.ptr);
+    try init_runtime(heap_buf);
     defer c.wasm_runtime_destroy();
 
     var error_buf: [ERROR_SIZE]u8 = undefined;
