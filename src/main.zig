@@ -26,10 +26,10 @@ pub fn ret_1337() u64 {
 
 const native_symbols = [1]c.NativeSymbol{c.NativeSymbol{ .symbol = "ret_1337", .func_ptr = @constCast(&ret_1337), .signature = "()I" }};
 
+const HEAP_SIZE = 2 * 1024 * 1024; // 2 MB
+
 pub fn run_aot() !ProgramReturn {
     var result = ProgramReturn.init();
-    var heap_buf: [512 * 1024]u8 = undefined;
-    const heap_size = heap_buf.len;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -38,12 +38,18 @@ pub fn run_aot() !ProgramReturn {
     const aot_file = try std.fs.cwd().readFileAlloc(allocator, "zig-out/bin/program.aot", 4096);
     defer allocator.free(aot_file);
 
+    const heap_buf = allocator.alloc(u8, HEAP_SIZE) catch {
+        _ = std.fmt.bufPrint(&result.error_message, "Failed to allocate memory for WASM heap.", .{}) catch {};
+        return result;
+    };
+    defer allocator.free(heap_buf);
+
     // Initialize runtime args
     var init_args = std.mem.zeroes(c.RuntimeInitArgs);
     init_args.mem_alloc_type = c.Alloc_With_Pool;
-    init_args.mem_alloc_option.pool.heap_buf = @ptrCast(&heap_buf);
+    init_args.mem_alloc_option.pool.heap_buf = heap_buf.ptr;
 
-    init_args.mem_alloc_option.pool.heap_size = @intCast(heap_size);
+    init_args.mem_alloc_option.pool.heap_size = @intCast(HEAP_SIZE);
     init_args.running_mode = c.Mode_Interp;
     init_args.native_module_name = "avm";
 
@@ -76,7 +82,7 @@ pub fn run_aot() !ProgramReturn {
     }
     defer c.wasm_runtime_unload(module);
 
-    const module_inst = c.wasm_runtime_instantiate(module, stack_size, @intCast(heap_size), &error_buf, error_buf.len);
+    const module_inst = c.wasm_runtime_instantiate(module, stack_size, @intCast(HEAP_SIZE), &error_buf, error_buf.len);
     if (module_inst == null) {
         _ = std.fmt.bufPrint(&result.error_message, "{s}", .{error_buf}) catch {};
         return result;
