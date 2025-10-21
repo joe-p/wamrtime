@@ -6,6 +6,7 @@ const c = @cImport({
 });
 
 const ERROR_SIZE = 128;
+const ITERS = 1;
 
 pub const ProgramReturn = struct {
     return_value: u64,
@@ -18,6 +19,12 @@ pub const ProgramReturn = struct {
         };
     }
 };
+
+pub fn hello() void {
+    std.debug.print("Hello from Zig WAMR host!\n", .{});
+}
+
+const native_symbol = [1]c.NativeSymbol{c.NativeSymbol{ .symbol = "hello", .func_ptr = @constCast(&hello), .signature = "()" }};
 
 pub fn main() !void {
     var result = ProgramReturn.init();
@@ -45,6 +52,12 @@ pub fn main() !void {
         return;
     }
     defer c.wasm_runtime_destroy();
+
+    if (!c.wasm_runtime_register_natives("env", @constCast(&native_symbol), 1)) {
+        _ = std.fmt.bufPrint(&result.error_message, "Register native symbols failed.", .{}) catch {};
+        std.debug.print("Register native symbols failed.\n", .{});
+        return;
+    }
 
     const package_type = c.get_package_type(aot_file.ptr, @intCast(aot_file.len));
     std.debug.print("Package type for file of size {d}: {d}\n", .{ aot_file.len, package_type });
@@ -112,9 +125,8 @@ pub fn main() !void {
     // Measure subsequent calls time
     _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
 
-    const iterations = 1000;
     var i: i32 = 0;
-    while (i < iterations) : (i += 1) {
+    while (i < ITERS) : (i += 1) {
         results = [_]c.wasm_val_t{c.wasm_val_t{
             .kind = c.WASM_I64,
             .of = .{ .i64 = 0 },
@@ -131,8 +143,8 @@ pub fn main() !void {
 
     _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
 
-    const time_per_op = @divTrunc(end.tv_nsec - start.tv_nsec, @as(c_long, iterations));
-    std.debug.print("Subsequent calls time: {d} ns/iter ({d:.6} ms/{d} iters)\n", .{ time_per_op, @as(f64, @floatFromInt(time_per_op)) / 1e6, iterations });
+    const time_per_op = @divTrunc(end.tv_nsec - start.tv_nsec, @as(c_long, ITERS));
+    std.debug.print("Subsequent calls time: {d} ns/iter ({d:.6} ms/{d} iters)\n", .{ time_per_op, @as(f64, @floatFromInt(time_per_op)) / 1e6, ITERS });
 
     return;
 }
