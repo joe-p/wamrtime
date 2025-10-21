@@ -27,6 +27,7 @@ pub fn ret_1337() u64 {
 const native_symbols = [1]c.NativeSymbol{c.NativeSymbol{ .symbol = "ret_1337", .func_ptr = @constCast(&ret_1337), .signature = "()I" }};
 
 const HEAP_SIZE = 2 * 1024 * 1024; // 2 MB
+const STACK_SIZE: u32 = 8092;
 
 pub fn init_runtime(heap_buf: [*]u8) !void {
     // Initialize runtime args
@@ -47,6 +48,51 @@ pub fn init_runtime(heap_buf: [*]u8) !void {
     }
 }
 
+const Program = struct {
+    module: *c.WASMModuleCommon,
+    module_inst: *c.WASMModuleInstanceCommon,
+    exec_env: *c.WASMExecEnv,
+    program_func: c.wasm_function_inst_t,
+    pub fn deinit(self: *Program) void {
+        c.wasm_runtime_destroy_exec_env(self.exec_env);
+        c.wasm_runtime_deinstantiate(self.module_inst);
+        c.wasm_runtime_unload(self.module);
+        self.* = undefined;
+    }
+
+    pub fn init(aot_file: []const u8, error_buf: []u8, stack_size: usize, heap_size: usize) !Program {
+        const aot_len = std.math.cast(u32, aot_file.len) orelse return error.InputTooLarge;
+        const err_len = std.math.cast(u32, error_buf.len) orelse return error.InputTooLarge;
+        const heap_len = std.math.cast(u32, heap_size) orelse return error.InputTooLarge;
+        const stack_len = std.math.cast(u32, stack_size) orelse return error.InputTooLarge;
+
+        const mod: ?*c.WASMModuleCommon = c.wasm_runtime_load(@constCast(aot_file.ptr), aot_len, error_buf.ptr, err_len);
+        if (mod == null) return error.LoadFailed;
+        errdefer c.wasm_runtime_unload(mod.?);
+
+        const inst: ?*c.WASMModuleInstanceCommon = c.wasm_runtime_instantiate(mod.?, stack_len, heap_len, error_buf.ptr, err_len);
+        if (inst == null) return error.InstantiateFailed;
+        errdefer c.wasm_runtime_deinstantiate(inst.?);
+
+        const env: ?*c.WASMExecEnv = c.wasm_runtime_create_exec_env(inst.?, stack_len);
+        if (env == null) return error.ExecEnvCreateFailed;
+        errdefer c.wasm_runtime_destroy_exec_env(env.?);
+
+        const name = "program\x00";
+        const func: ?c.wasm_function_inst_t = c.wasm_runtime_lookup_function(inst.?, name);
+        if (func == null) {
+            return error.FunctionNotFound;
+        }
+
+        return Program{
+            .module = mod.?,
+            .module_inst = inst.?,
+            .exec_env = env.?,
+            .program_func = func.?,
+        };
+    }
+};
+
 pub fn run_aot() !ProgramReturn {
     var result = ProgramReturn.init();
 
@@ -66,44 +112,18 @@ pub fn run_aot() !ProgramReturn {
     try init_runtime(heap_buf.ptr);
     defer c.wasm_runtime_destroy();
 
-    const package_type = c.get_package_type(aot_file.ptr, @intCast(aot_file.len));
-    std.debug.print("Package type for file of size {d}: {d}\n", .{ aot_file.len, package_type });
-
-    const stack_size: u32 = 8092;
     var error_buf: [ERROR_SIZE]u8 = undefined;
 
     var start: c.struct_timespec = undefined;
     var end: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
 
-    const module = c.wasm_runtime_load(aot_file.ptr, @intCast(aot_file.len), &error_buf, error_buf.len);
-    if (module == null) {
-        _ = std.fmt.bufPrint(&result.error_message, "{s}", .{error_buf}) catch {};
+    var prog = try Program.init(aot_file, error_buf[0..], STACK_SIZE, HEAP_SIZE);
+    defer prog.deinit();
 
-        return result;
-    }
-    defer c.wasm_runtime_unload(module);
-
-    const module_inst = c.wasm_runtime_instantiate(module, stack_size, @intCast(HEAP_SIZE), &error_buf, error_buf.len);
-    if (module_inst == null) {
-        _ = std.fmt.bufPrint(&result.error_message, "{s}", .{error_buf}) catch {};
-        return result;
-    }
-    defer c.wasm_runtime_deinstantiate(module_inst);
-
-    const exec_env = c.wasm_runtime_create_exec_env(module_inst, stack_size);
-    if (exec_env == null) {
-        _ = std.fmt.bufPrint(&result.error_message, "Create wasm execution environment failed.", .{}) catch {};
-        return result;
-    }
-    defer c.wasm_runtime_destroy_exec_env(exec_env);
-
-    const program_func = c.wasm_runtime_lookup_function(module_inst, "program");
-    if (program_func == null) {
-        _ = std.fmt.bufPrint(&result.error_message, "The program wasm function is not found.", .{}) catch {};
-        return result;
-    }
-
+    const module_inst = prog.module_inst;
+    const exec_env = prog.exec_env;
+    const program_func = prog.program_func;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
     const elapsed_ns = end.tv_nsec - start.tv_nsec;
     std.debug.print("Load to lookup time: {d} nanoseconds ({d:.6} ms)\n", .{ elapsed_ns, @as(f64, @floatFromInt(elapsed_ns)) / 1e6 });
