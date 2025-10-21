@@ -53,6 +53,7 @@ const Program = struct {
     module_inst: *c.WASMModuleInstanceCommon,
     exec_env: *c.WASMExecEnv,
     program_func: c.wasm_function_inst_t,
+
     pub fn deinit(self: *Program) void {
         c.wasm_runtime_destroy_exec_env(self.exec_env);
         c.wasm_runtime_deinstantiate(self.module_inst);
@@ -91,6 +92,25 @@ const Program = struct {
             .program_func = func.?,
         };
     }
+
+    pub fn call(self: *Program) !ProgramReturn {
+        var result = ProgramReturn.init();
+
+        var call_results = [_]c.wasm_val_t{c.wasm_val_t{
+            .kind = c.WASM_I64,
+            .of = .{ .i64 = 0 },
+        }};
+
+        if (!c.wasm_runtime_call_wasm_a(self.exec_env, self.program_func, 1, &call_results, 0, null)) {
+            const exception = c.wasm_runtime_get_exception(self.module_inst);
+            _ = std.fmt.bufPrint(&result.error_message, "{s}", .{exception}) catch {};
+            return result;
+        }
+
+        result.return_value = @intCast(call_results[0].of.i64);
+
+        return result;
+    }
 };
 
 pub fn run_aot() !ProgramReturn {
@@ -121,28 +141,16 @@ pub fn run_aot() !ProgramReturn {
     var prog = try Program.init(aot_file, error_buf[0..], STACK_SIZE, HEAP_SIZE);
     defer prog.deinit();
 
-    const module_inst = prog.module_inst;
-    const exec_env = prog.exec_env;
-    const program_func = prog.program_func;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
     const elapsed_ns = end.tv_nsec - start.tv_nsec;
     std.debug.print("Load to lookup time: {d} nanoseconds ({d:.6} ms)\n", .{ elapsed_ns, @as(f64, @floatFromInt(elapsed_ns)) / 1e6 });
 
     // Measure first call time separately
     _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
-
-    var results = [_]c.wasm_val_t{c.wasm_val_t{
-        .kind = c.WASM_I64,
-        .of = .{ .i64 = 0 },
-    }};
-
-    if (!c.wasm_runtime_call_wasm_a(exec_env, program_func, 1, &results, 0, null)) {
-        const exception = c.wasm_runtime_get_exception(module_inst);
-        _ = std.fmt.bufPrint(&result.error_message, "{s}", .{exception}) catch {};
+    result = prog.call() catch |err| {
+        _ = std.fmt.bufPrint(&result.error_message, "Error during first call: {s}", .{err}) catch {};
         return result;
-    }
-
-    result.return_value = @intCast(results[0].of.i64);
+    };
 
     _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
     const first_call_time = end.tv_nsec - start.tv_nsec;
@@ -152,18 +160,10 @@ pub fn run_aot() !ProgramReturn {
     _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
 
     for (0..ITERS) |_| {
-        results = [_]c.wasm_val_t{c.wasm_val_t{
-            .kind = c.WASM_I64,
-            .of = .{ .i64 = 0 },
-        }};
-
-        if (!c.wasm_runtime_call_wasm_a(exec_env, program_func, 1, &results, 0, null)) {
-            const exception = c.wasm_runtime_get_exception(module_inst);
-            _ = std.fmt.bufPrint(&result.error_message, "{s}", .{exception}) catch {};
+        result = prog.call() catch |err| {
+            _ = std.fmt.bufPrint(&result.error_message, "Error during subsequent call: {s}", .{err}) catch {};
             return result;
-        }
-
-        result.return_value = @intCast(results[0].of.i64);
+        };
     }
 
     _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
