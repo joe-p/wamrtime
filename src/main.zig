@@ -49,5 +49,90 @@ pub fn main() !void {
     const package_type = c.get_package_type(aot_file.ptr, @intCast(aot_file.len));
     std.debug.print("Package type for file of size {d}: {d}\n", .{ aot_file.len, package_type });
 
+    const stack_size: u32 = 8092;
+    var error_buf: [ERROR_SIZE]u8 = undefined;
+
+    var start: c.struct_timespec = undefined;
+    var end: c.struct_timespec = undefined;
+    _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
+
+    const module = c.wasm_runtime_load(aot_file.ptr, @intCast(aot_file.len), &error_buf, error_buf.len);
+    if (module == null) {
+        _ = std.fmt.bufPrint(&result.error_message, "{s}", .{error_buf}) catch {};
+        std.debug.print("Error loading module: {s}\n", .{error_buf});
+
+        return;
+    }
+    defer c.wasm_runtime_unload(module);
+
+    const module_inst = c.wasm_runtime_instantiate(module, stack_size, @intCast(heap_size), &error_buf, error_buf.len);
+    if (module_inst == null) {
+        _ = std.fmt.bufPrint(&result.error_message, "{s}", .{error_buf}) catch {};
+        return;
+    }
+    defer c.wasm_runtime_deinstantiate(module_inst);
+
+    const exec_env = c.wasm_runtime_create_exec_env(module_inst, stack_size);
+    if (exec_env == null) {
+        _ = std.fmt.bufPrint(&result.error_message, "Create wasm execution environment failed.", .{}) catch {};
+        return;
+    }
+    defer c.wasm_runtime_destroy_exec_env(exec_env);
+
+    const program_func = c.wasm_runtime_lookup_function(module_inst, "program");
+    if (program_func == null) {
+        _ = std.fmt.bufPrint(&result.error_message, "The program wasm function is not found.", .{}) catch {};
+        return;
+    }
+
+    _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
+    const elapsed_ns = end.tv_nsec - start.tv_nsec;
+    std.debug.print("Load to lookup time: {d} nanoseconds ({d:.6} ms)\n", .{ elapsed_ns, @as(f64, @floatFromInt(elapsed_ns)) / 1e6 });
+
+    // Measure first call time separately
+    _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
+
+    var results = [_]c.wasm_val_t{c.wasm_val_t{
+        .kind = c.WASM_I64,
+        .of = .{ .i64 = 0 },
+    }};
+
+    if (!c.wasm_runtime_call_wasm_a(exec_env, program_func, 1, &results, 0, null)) {
+        const exception = c.wasm_runtime_get_exception(module_inst);
+        _ = std.fmt.bufPrint(&result.error_message, "{s}", .{exception}) catch {};
+        return;
+    }
+
+    result.return_value = @intCast(results[0].of.i64);
+
+    _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
+    const first_call_time = end.tv_nsec - start.tv_nsec;
+    std.debug.print("First call time: {d} nanoseconds ({d:.6} ms)\n", .{ first_call_time, @as(f64, @floatFromInt(first_call_time)) / 1e6 });
+
+    // Measure subsequent calls time
+    _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
+
+    const iterations = 1000;
+    var i: i32 = 0;
+    while (i < iterations) : (i += 1) {
+        results = [_]c.wasm_val_t{c.wasm_val_t{
+            .kind = c.WASM_I64,
+            .of = .{ .i64 = 0 },
+        }};
+
+        if (!c.wasm_runtime_call_wasm_a(exec_env, program_func, 1, &results, 0, null)) {
+            const exception = c.wasm_runtime_get_exception(module_inst);
+            _ = std.fmt.bufPrint(&result.error_message, "{s}", .{exception}) catch {};
+            return;
+        }
+
+        result.return_value = @intCast(results[0].of.i64);
+    }
+
+    _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
+
+    const time_per_op = @divTrunc(end.tv_nsec - start.tv_nsec, @as(c_long, iterations));
+    std.debug.print("Subsequent calls time: {d} ns/iter ({d:.6} ms/{d} iters)\n", .{ time_per_op, @as(f64, @floatFromInt(time_per_op)) / 1e6, iterations });
+
     return;
 }

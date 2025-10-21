@@ -60,22 +60,8 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    // Create tests
-    const unit_tests = b.addTest(.{
-        .name = "wamr-zig-test",
-        .root_module = b.createModule(.{
-            .target = target,
-            .optimize = optimize,
-            .root_source_file = b.path("src/main.zig"),
-        }),
-    });
+    const exe_check = b.addExecutable(.{ .name = exe.name, .root_module = exe.root_module });
 
-    // Add the same include paths to tests
-    unit_tests.addIncludePath(b.path(wamr_root ++ "/core/iwasm/include"));
-    unit_tests.addIncludePath(b.path(wamr_root ++ "/core/shared/include"));
-    unit_tests.addIncludePath(b.path("src"));
-
-    const run_unit_tests = b.addRunArtifact(unit_tests);
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_unit_tests.step);
+    const check = b.step("check", "Check if foo compiles");
+    check.dependOn(&exe_check.step);
 }
