@@ -1,6 +1,6 @@
 extern fn hello() void;
+extern fn ret_1337() u64;
 
 export fn program() u64 {
-    hello();
-    return 1;
+    return ret_1337();
 }

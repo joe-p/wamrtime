@@ -6,7 +6,7 @@ const c = @cImport({
 });
 
 const ERROR_SIZE = 128;
-const ITERS = 1;
+const ITERS = 1000;
 
 pub const ProgramReturn = struct {
     return_value: u64,
@@ -20,13 +20,13 @@ pub const ProgramReturn = struct {
     }
 };
 
-pub fn hello() void {
-    std.debug.print("Hello from Zig WAMR host!\n", .{});
+pub fn ret_1337() u64 {
+    return 1337;
 }
 
-const native_symbol = [1]c.NativeSymbol{c.NativeSymbol{ .symbol = "hello", .func_ptr = @constCast(&hello), .signature = "()" }};
+const native_symbols = [1]c.NativeSymbol{c.NativeSymbol{ .symbol = "ret_1337", .func_ptr = @constCast(&ret_1337), .signature = "()I" }};
 
-pub fn main() !void {
+pub fn run_aot() !ProgramReturn {
     var result = ProgramReturn.init();
     var heap_buf: [512 * 1024]u8 = undefined;
     const heap_size = heap_buf.len;
@@ -49,14 +49,13 @@ pub fn main() !void {
 
     if (!c.wasm_runtime_full_init(&init_args)) {
         _ = std.fmt.bufPrint(&result.error_message, "Init runtime environment failed.", .{}) catch {};
-        return;
+        return result;
     }
     defer c.wasm_runtime_destroy();
 
-    if (!c.wasm_runtime_register_natives("env", @constCast(&native_symbol), 1)) {
+    if (!c.wasm_runtime_register_natives("env", @constCast(&native_symbols), 1)) {
         _ = std.fmt.bufPrint(&result.error_message, "Register native symbols failed.", .{}) catch {};
-        std.debug.print("Register native symbols failed.\n", .{});
-        return;
+        return result;
     }
 
     const package_type = c.get_package_type(aot_file.ptr, @intCast(aot_file.len));
@@ -72,30 +71,29 @@ pub fn main() !void {
     const module = c.wasm_runtime_load(aot_file.ptr, @intCast(aot_file.len), &error_buf, error_buf.len);
     if (module == null) {
         _ = std.fmt.bufPrint(&result.error_message, "{s}", .{error_buf}) catch {};
-        std.debug.print("Error loading module: {s}\n", .{error_buf});
 
-        return;
+        return result;
     }
     defer c.wasm_runtime_unload(module);
 
     const module_inst = c.wasm_runtime_instantiate(module, stack_size, @intCast(heap_size), &error_buf, error_buf.len);
     if (module_inst == null) {
         _ = std.fmt.bufPrint(&result.error_message, "{s}", .{error_buf}) catch {};
-        return;
+        return result;
     }
     defer c.wasm_runtime_deinstantiate(module_inst);
 
     const exec_env = c.wasm_runtime_create_exec_env(module_inst, stack_size);
     if (exec_env == null) {
         _ = std.fmt.bufPrint(&result.error_message, "Create wasm execution environment failed.", .{}) catch {};
-        return;
+        return result;
     }
     defer c.wasm_runtime_destroy_exec_env(exec_env);
 
     const program_func = c.wasm_runtime_lookup_function(module_inst, "program");
     if (program_func == null) {
         _ = std.fmt.bufPrint(&result.error_message, "The program wasm function is not found.", .{}) catch {};
-        return;
+        return result;
     }
 
     _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
@@ -113,7 +111,7 @@ pub fn main() !void {
     if (!c.wasm_runtime_call_wasm_a(exec_env, program_func, 1, &results, 0, null)) {
         const exception = c.wasm_runtime_get_exception(module_inst);
         _ = std.fmt.bufPrint(&result.error_message, "{s}", .{exception}) catch {};
-        return;
+        return result;
     }
 
     result.return_value = @intCast(results[0].of.i64);
@@ -125,8 +123,7 @@ pub fn main() !void {
     // Measure subsequent calls time
     _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
 
-    var i: i32 = 0;
-    while (i < ITERS) : (i += 1) {
+    for (0..ITERS) |_| {
         results = [_]c.wasm_val_t{c.wasm_val_t{
             .kind = c.WASM_I64,
             .of = .{ .i64 = 0 },
@@ -135,7 +132,7 @@ pub fn main() !void {
         if (!c.wasm_runtime_call_wasm_a(exec_env, program_func, 1, &results, 0, null)) {
             const exception = c.wasm_runtime_get_exception(module_inst);
             _ = std.fmt.bufPrint(&result.error_message, "{s}", .{exception}) catch {};
-            return;
+            return result;
         }
 
         result.return_value = @intCast(results[0].of.i64);
@@ -146,5 +143,14 @@ pub fn main() !void {
     const time_per_op = @divTrunc(end.tv_nsec - start.tv_nsec, @as(c_long, ITERS));
     std.debug.print("Subsequent calls time: {d} ns/iter ({d:.6} ms/{d} iters)\n", .{ time_per_op, @as(f64, @floatFromInt(time_per_op)) / 1e6, ITERS });
 
-    return;
+    return result;
+}
+
+pub fn main() !void {
+    const result = try run_aot();
+    if (result.error_message[0] != 0) {
+        std.debug.print("Error: {s}\n", .{result.error_message});
+        return;
+    }
+    std.debug.print("WASM program returned: {d}\n", .{result.return_value});
 }
