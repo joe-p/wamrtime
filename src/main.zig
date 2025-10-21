@@ -28,7 +28,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const aot_file = try std.fs.cwd().readFileAlloc(allocator, "/Users/joe/git/joe-p/wamr-playground/out/wasm-apps/testapp.aot", 4096);
+    const aot_file = try std.fs.cwd().readFileAlloc(allocator, "zig-out/bin/program.aot", 4096);
     defer allocator.free(aot_file);
 
     // Initialize runtime args
