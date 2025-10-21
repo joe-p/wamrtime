@@ -28,6 +28,25 @@ const native_symbols = [1]c.NativeSymbol{c.NativeSymbol{ .symbol = "ret_1337", .
 
 const HEAP_SIZE = 2 * 1024 * 1024; // 2 MB
 
+pub fn init_runtime(heap_buf: [*]u8) !void {
+    // Initialize runtime args
+    var init_args = std.mem.zeroes(c.RuntimeInitArgs);
+    init_args.mem_alloc_type = c.Alloc_With_Pool;
+    init_args.mem_alloc_option.pool.heap_buf = heap_buf;
+
+    init_args.mem_alloc_option.pool.heap_size = @intCast(HEAP_SIZE);
+    init_args.running_mode = c.Mode_Interp;
+    init_args.native_module_name = "avm";
+
+    if (!c.wasm_runtime_full_init(&init_args)) {
+        return error.InitRuntimeFailed;
+    }
+
+    if (!c.wasm_runtime_register_natives("env", @constCast(&native_symbols), 1)) {
+        return error.RegisterNativesFailed;
+    }
+}
+
 pub fn run_aot() !ProgramReturn {
     var result = ProgramReturn.init();
 
@@ -44,25 +63,8 @@ pub fn run_aot() !ProgramReturn {
     };
     defer allocator.free(heap_buf);
 
-    // Initialize runtime args
-    var init_args = std.mem.zeroes(c.RuntimeInitArgs);
-    init_args.mem_alloc_type = c.Alloc_With_Pool;
-    init_args.mem_alloc_option.pool.heap_buf = heap_buf.ptr;
-
-    init_args.mem_alloc_option.pool.heap_size = @intCast(HEAP_SIZE);
-    init_args.running_mode = c.Mode_Interp;
-    init_args.native_module_name = "avm";
-
-    if (!c.wasm_runtime_full_init(&init_args)) {
-        _ = std.fmt.bufPrint(&result.error_message, "Init runtime environment failed.", .{}) catch {};
-        return result;
-    }
+    try init_runtime(heap_buf.ptr);
     defer c.wasm_runtime_destroy();
-
-    if (!c.wasm_runtime_register_natives("env", @constCast(&native_symbols), 1)) {
-        _ = std.fmt.bufPrint(&result.error_message, "Register native symbols failed.", .{}) catch {};
-        return result;
-    }
 
     const package_type = c.get_package_type(aot_file.ptr, @intCast(aot_file.len));
     std.debug.print("Package type for file of size {d}: {d}\n", .{ aot_file.len, package_type });
