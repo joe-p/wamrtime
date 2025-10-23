@@ -96,6 +96,16 @@ const Program = struct {
 
 const MAX_PROGRAMS = 256;
 
+const InitNextContext = struct {
+    evaluator: *Evaluator,
+    aot_bytes: []const []u8,
+    result: ?anyerror!void = null,
+};
+
+fn initNextThread(ctx: *InitNextContext) void {
+    ctx.result = ctx.evaluator.init_next(ctx.aot_bytes);
+}
+
 const Evaluator = struct {
     heap_buf: []u8,
     error_buf: [ERROR_SIZE]u8,
@@ -106,6 +116,15 @@ const Evaluator = struct {
         next_len: usize,
     },
 
+    fn init_next(self: *Evaluator, aot_bytes: []const []u8) !void {
+        for (0..aot_bytes.len) |idx| {
+            const aot = aot_bytes[idx];
+            const program = try Program.init(aot, &self.error_buf, STACK_SIZE, HEAP_SIZE);
+            self.programs.next[idx] = program;
+        }
+        self.programs.next_len = aot_bytes.len;
+    }
+
     pub fn next_round(self: *Evaluator, aot_bytes: []const []u8) !void {
         for (0..self.programs.current_len) |idx| {
             self.programs.current[idx].deinit();
@@ -114,18 +133,23 @@ const Evaluator = struct {
         self.programs.current = self.programs.next;
         self.programs.current_len = self.programs.next_len;
 
-        for (0..aot_bytes.len) |idx| {
-            const aot = aot_bytes[idx];
-            const program = try Program.init(aot, &self.error_buf, STACK_SIZE, HEAP_SIZE);
-            self.programs.next[idx] = program;
-        }
+        var ctx = InitNextContext{
+            .evaluator = self,
+            .aot_bytes = aot_bytes,
+        };
 
-        self.programs.next_len = aot_bytes.len;
+        const thread = try std.Thread.spawn(.{}, initNextThread, .{&ctx});
+
+        if (ctx.result) |result| {
+            try result;
+        }
 
         for (0..self.programs.current_len) |idx| {
             const res = try self.programs.current[idx].call();
             std.debug.assert(res.return_value == 1337);
         }
+
+        thread.join();
     }
 
     pub fn init(heap_buf: []u8) !Evaluator {
