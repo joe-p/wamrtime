@@ -94,10 +94,41 @@ const Program = struct {
     }
 };
 
+const MAX_PROGRAMS = 256;
+
 const Evaluator = struct {
     heap_buf: []u8,
+    error_buf: [ERROR_SIZE]u8,
+    programs: struct {
+        current: [MAX_PROGRAMS]Program,
+        current_len: usize,
+        next: [MAX_PROGRAMS]Program,
+        next_len: usize,
+    },
 
-    pub fn init(heap_buf: []u8) !void {
+    pub fn next_round(self: *Evaluator, aot_bytes: []const []u8) !void {
+        for (0..self.programs.current_len) |idx| {
+            self.programs.current[idx].deinit();
+        }
+
+        self.programs.current = self.programs.next;
+        self.programs.current_len = self.programs.next_len;
+
+        for (0..aot_bytes.len) |idx| {
+            const aot = aot_bytes[idx];
+            const program = try Program.init(aot, &self.error_buf, STACK_SIZE, HEAP_SIZE);
+            self.programs.next[idx] = program;
+        }
+
+        self.programs.next_len = aot_bytes.len;
+
+        for (0..self.programs.current_len) |idx| {
+            const res = try self.programs.current[idx].call();
+            std.debug.assert(res.return_value == 1337);
+        }
+    }
+
+    pub fn init(heap_buf: []u8) !Evaluator {
         // Initialize runtime args
         var init_args = std.mem.zeroes(c.RuntimeInitArgs);
         init_args.mem_alloc_type = c.Alloc_With_Pool;
@@ -115,6 +146,17 @@ const Evaluator = struct {
         if (!c.wasm_runtime_register_natives("env", @constCast(&native_symbols), 1)) {
             return error.RegisterNativesFailed;
         }
+
+        return Evaluator{
+            .heap_buf = heap_buf,
+            .error_buf = undefined,
+            .programs = .{
+                .current = undefined,
+                .current_len = 0,
+                .next = undefined,
+                .next_len = 0,
+            },
+        };
     }
 
     pub fn deinit() void {
@@ -122,7 +164,7 @@ const Evaluator = struct {
     }
 };
 
-pub fn run_aot() !ProgramReturn {
+pub fn run_aot() !void {
     var result = ProgramReturn.init();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -134,60 +176,28 @@ pub fn run_aot() !ProgramReturn {
 
     const heap_buf = allocator.alloc(u8, HEAP_SIZE) catch {
         _ = std.fmt.bufPrint(&result.error_message, "Failed to allocate memory for WASM heap.", .{}) catch {};
-        return result;
+        return;
     };
     defer allocator.free(heap_buf);
 
-    try Evaluator.init(heap_buf);
+    var eval = try Evaluator.init(heap_buf);
 
-    var error_buf: [ERROR_SIZE]u8 = undefined;
-
-    var start: c.struct_timespec = undefined;
-    var end: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
-
-    var prog = try Program.init(aot_file, error_buf[0..], STACK_SIZE, HEAP_SIZE);
-    defer prog.deinit();
-
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
-    const elapsed_ns = end.tv_nsec - start.tv_nsec;
-    std.debug.print("Load to lookup time: {d} nanoseconds ({d:.6} ms)\n", .{ elapsed_ns, @as(f64, @floatFromInt(elapsed_ns)) / 1e6 });
-
-    // Measure first call time separately
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
-    result = prog.call() catch |err| {
-        _ = std.fmt.bufPrint(&result.error_message, "Error during first call: {s}", .{err}) catch {};
-        return result;
+    const arr = [_][]u8{
+        aot_file,
     };
 
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
-    const first_call_time = end.tv_nsec - start.tv_nsec;
-    std.debug.print("First call time: {d} nanoseconds ({d:.6} ms)\n", .{ first_call_time, @as(f64, @floatFromInt(first_call_time)) / 1e6 });
+    try (&eval).next_round(&arr); // Inits programs into next, but since current is empty nothing is ran
+    try (&eval).next_round(&arr); // Inits programs into next, runs current
+    try (&eval).next_round(&arr); // Inits programs into next, runs current
 
-    // Measure subsequent calls time
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &start);
-
-    for (0..ITERS) |_| {
-        result = prog.call() catch |err| {
-            _ = std.fmt.bufPrint(&result.error_message, "Error during subsequent call: {s}", .{err}) catch {};
-            return result;
-        };
+    for (0..1000) |i| {
+        try (&eval).next_round(&arr);
+        if (i % 100 == 0) {
+            std.debug.print("Completed {d} iterations\n", .{i});
+        }
     }
-
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &end);
-
-    const time_per_op = @divTrunc(end.tv_nsec - start.tv_nsec, @as(c_long, ITERS));
-    std.debug.print("Subsequent calls time: {d} ns/iter ({d:.6} ms/{d} iters)\n", .{ time_per_op, @as(f64, @floatFromInt(time_per_op)) / 1e6, ITERS });
-
-    return result;
 }
 
 pub fn main() !void {
-    const result = try run_aot();
-    if (result.error_message[0] != 0) {
-        std.debug.print("Error: {s}\n", .{result.error_message});
-        return;
-    }
-    std.debug.print("WASM program returned: {d}\n", .{result.return_value});
-    std.debug.assert(result.return_value == 1337);
+    try run_aot();
 }
