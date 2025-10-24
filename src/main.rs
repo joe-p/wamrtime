@@ -122,24 +122,41 @@ impl Program {
     }
 }
 
-pub struct Runtime {
+pub struct WamrRuntime {
+    heap: Vec<u8>,
     native_symbols: Vec<wamr::NativeSymbol>,
 }
 
-impl Drop for Runtime {
+impl Drop for WamrRuntime {
     fn drop(&mut self) {
         wamr_fns::wasm_runtime_destroy();
     }
 }
 
-impl Runtime {
-    pub fn new(heap_buf: &mut [u8]) -> Self {
+impl Default for WamrRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WamrRuntime {
+    pub fn new() -> Self {
+        let runtime = WamrRuntime {
+            native_symbols: vec![wamr::NativeSymbol {
+                symbol: c"ret_1337".as_ptr(),
+                func_ptr: ret_1337 as *mut c_void,
+                signature: c"()I".as_ptr(),
+                ..Default::default()
+            }],
+            heap: vec![0; HEAP_SIZE],
+        };
+
         let mut init_args = wamr::RuntimeInitArgs {
             mem_alloc_type: wamr::mem_alloc_type_t_Alloc_With_Pool,
             running_mode: wamr::RunningMode_Mode_Interp,
             mem_alloc_option: wamr::MemAllocOption {
                 pool: wamr::MemAllocOption__bindgen_ty_1 {
-                    heap_buf: heap_buf.as_ptr() as *mut c_void,
+                    heap_buf: runtime.heap.as_ptr() as *mut c_void,
                     heap_size: HEAP_SIZE as u32,
                 },
             },
@@ -151,15 +168,6 @@ impl Runtime {
         }
 
         println!("Registering native functions...");
-
-        let runtime = Runtime {
-            native_symbols: vec![wamr::NativeSymbol {
-                symbol: c"ret_1337".as_ptr(),
-                func_ptr: ret_1337 as *mut c_void,
-                signature: c"()I".as_ptr(),
-                ..Default::default()
-            }],
-        };
 
         if !wamr_fns::wasm_runtime_register_natives(
             c"env".as_ptr(),
@@ -187,6 +195,7 @@ pub struct Evaluator {
     state: Arc<Mutex<SharedEvaluatorState>>,
     current_idx: usize,
     init_thread: Option<thread::JoinHandle<Result<(), String>>>,
+    _runtime: WamrRuntime,
 }
 
 impl Default for Evaluator {
@@ -217,6 +226,7 @@ impl Evaluator {
             })),
             current_idx: 0,
             init_thread: None,
+            _runtime: WamrRuntime::new(),
         }
     }
 
@@ -254,6 +264,8 @@ impl Evaluator {
         Ok(())
     }
 
+    // NOTE: We need ownership of aot_bytes_vec because WAMR may modify it. We'll let the
+    // caller worry about whether they need to clone it, but in most real-world cases they won't
     pub fn next_round(&mut self, aot_bytes_vec: Vec<Vec<u8>>) -> Result<(), String> {
         let join_start = Instant::now();
         if let Some(thread) = self.init_thread.take() {
@@ -299,10 +311,6 @@ impl Evaluator {
 
 fn main() {
     let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
-    let mut heap_buf: Vec<u8> = vec![0; HEAP_SIZE];
-
-    let _runtime = Runtime::new(&mut heap_buf);
-    println!("WAMR Runtime initialized.");
 
     let mut evaluator = Evaluator::new();
 
