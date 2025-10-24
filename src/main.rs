@@ -82,7 +82,9 @@ impl Program {
     }
 }
 
-pub struct Runtime {}
+pub struct Runtime {
+    native_symbols: Vec<wamr::NativeSymbol>,
+}
 
 impl Drop for Runtime {
     fn drop(&mut self) {
@@ -113,23 +115,25 @@ impl Runtime {
 
             println!("Registering native functions...");
 
-            let native_symbols = [wamr::NativeSymbol {
-                symbol: c"ret_1337".as_ptr(),
-                func_ptr: ret_1337 as *mut c_void,
-                signature: c"()I".as_ptr(),
-                ..Default::default()
-            }];
+            let runtime = Runtime {
+                native_symbols: vec![wamr::NativeSymbol {
+                    symbol: c"ret_1337".as_ptr(),
+                    func_ptr: ret_1337 as *mut c_void,
+                    signature: c"()I".as_ptr(),
+                    ..Default::default()
+                }],
+            };
 
             if !wamr::wasm_runtime_register_natives(
                 c"env".as_ptr(),
-                native_symbols.as_ptr() as *mut wamr::NativeSymbol,
-                native_symbols.len() as u32,
+                runtime.native_symbols.as_ptr() as *mut wamr::NativeSymbol,
+                runtime.native_symbols.len() as u32,
             ) {
                 panic!("Failed to register native symbols");
             }
 
             println!("Native functions registered successfully.");
-            Runtime {}
+            runtime
         }
     }
 }
