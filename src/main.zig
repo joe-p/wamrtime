@@ -128,14 +128,20 @@ const Evaluator = struct {
     }
 
     pub fn next_round(self: *Evaluator, aot_bytes: []const []u8) !void {
+        const join_start = try std.time.Instant.now();
         if (self.next_thread) |thread| {
             thread.join();
             self.next_thread = null;
         }
+        const join_duration_ns = (try std.time.Instant.now()).since(join_start);
+        std.debug.print("Join duration: {d} ns\n", .{join_duration_ns});
 
+        const deinit_start = try std.time.Instant.now();
         for (0..self.programs.current_len) |idx| {
             self.programs.current[idx].deinit();
         }
+        const deinit_duration_ns = (try std.time.Instant.now()).since(deinit_start);
+        std.debug.print("Deinit duration: {d} ns\n", .{deinit_duration_ns});
 
         self.programs.current = self.programs.next;
         self.programs.current_len = self.programs.next_len;
@@ -148,7 +154,10 @@ const Evaluator = struct {
         self.next_thread = try std.Thread.spawn(.{}, initNextThread, .{&self.next_ctx.?});
 
         for (0..self.programs.current_len) |idx| {
+            const start = try std.time.Instant.now();
             const res = try self.programs.current[idx].call();
+            const duration_ns = (try std.time.Instant.now()).since(start);
+            std.debug.print("Program {d} executed in {d} ns with return value {d}\n", .{ idx, duration_ns, res.return_value });
             std.debug.assert(res.return_value == 1337);
         }
     }
@@ -214,13 +223,9 @@ pub fn run_aot() !void {
         aot_file,
     };
 
-    try (&eval).next_round(&arr); // Inits programs into next, but since current is empty nothing is ran
-    try (&eval).next_round(&arr); // Inits programs into next, runs current
-    try (&eval).next_round(&arr); // Inits programs into next, runs current
-
-    for (0..1000) |i| {
+    for (0..10) |i| {
+        std.debug.print("\nIteration {d}:\n", .{i + 1});
         try (&eval).next_round(&arr);
-        std.debug.print("Completed {d} iterations\n", .{i});
     }
 
     std.debug.print("All iterations completed successfully.\n", .{});
