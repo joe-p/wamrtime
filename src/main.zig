@@ -250,8 +250,8 @@ pub fn run_aot() !void {
         try (&eval).next_round(&arr);
     }
 
-    std.debug.print("\nSleeping for 2 seconds before final iteration...\n", .{});
-    std.Thread.sleep(std.time.ns_per_ms * 2000);
+    std.debug.print("\nSleeping for 1 seconds before final iteration...\n", .{});
+    std.Thread.sleep(std.time.ns_per_ms * 1000);
 
     const start = try std.time.Instant.now();
     try (&eval).next_round(&arr);
