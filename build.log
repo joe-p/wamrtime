@@ -127,57 +127,57 @@ Compile success, file /Users/joe/git/joe-p/wamrtime/zig-out/bin/program.aot was 
 + zig build run
 
 Iteration 1:
-Join duration: 125 ns
-Spawn duration: 56625 ns
+Join duration: 41 ns
+Spawn duration: 48959 ns
 
 Iteration 2:
-Join duration: 387125 ns
-Spawn duration: 36208 ns
-Program 0 executed in 3083 ns with return value 1337
+Join duration: 407458 ns
+Spawn duration: 43833 ns
+Program 0 executed in 3458 ns with return value 1337
 
 Iteration 3:
-Join duration: 369167 ns
-Spawn duration: 42542 ns
-Program 0 executed in 2959 ns with return value 1337
+Join duration: 451292 ns
+Spawn duration: 31917 ns
+Program 0 executed in 2541 ns with return value 1337
 
 Iteration 4:
-Join duration: 664333 ns
-Spawn duration: 41167 ns
-Program 0 executed in 2458 ns with return value 1337
+Join duration: 461083 ns
+Spawn duration: 38250 ns
+Program 0 executed in 2542 ns with return value 1337
 
 Iteration 5:
-Join duration: 440250 ns
-Spawn duration: 56750 ns
-Program 0 executed in 2166 ns with return value 1337
+Join duration: 407417 ns
+Spawn duration: 30792 ns
+Program 0 executed in 2084 ns with return value 1337
 
 Iteration 6:
-Join duration: 411791 ns
-Spawn duration: 30292 ns
-Program 0 executed in 1709 ns with return value 1337
+Join duration: 352875 ns
+Spawn duration: 27875 ns
+Program 0 executed in 1667 ns with return value 1337
 
 Iteration 7:
-Join duration: 374917 ns
-Spawn duration: 27041 ns
-Program 0 executed in 1416 ns with return value 1337
+Join duration: 406833 ns
+Spawn duration: 34000 ns
+Program 0 executed in 2167 ns with return value 1337
 
 Iteration 8:
-Join duration: 464083 ns
-Spawn duration: 31833 ns
-Program 0 executed in 1500 ns with return value 1337
+Join duration: 374125 ns
+Spawn duration: 27125 ns
+Program 0 executed in 1375 ns with return value 1337
 
 Iteration 9:
-Join duration: 405500 ns
-Spawn duration: 33875 ns
-Program 0 executed in 1750 ns with return value 1337
-
-Iteration 10:
-Join duration: 421792 ns
-Spawn duration: 29166 ns
+Join duration: 387750 ns
+Spawn duration: 32583 ns
 Program 0 executed in 1500 ns with return value 1337
 
+Iteration 10:
+Join duration: 357125 ns
+Spawn duration: 28333 ns
+Program 0 executed in 1250 ns with return value 1337
+
 Sleeping for 1 seconds before final iteration...
-Join duration: 25208 ns
-Spawn duration: 56625 ns
-Program 0 executed in 5625 ns with return value 1337
-Final iteration executed in 112083 ns
+Join duration: 36500 ns
+Spawn duration: 65417 ns
+Program 0 executed in 13250 ns with return value 1337
+Final iteration executed in 147709 ns
 All iterations completed successfully.

@@ -122,26 +122,24 @@ const Evaluator = struct {
     error_buf: [ERROR_SIZE]u8,
     init_thread: ?std.Thread = null,
     next_ctx: ?InitNextContext = null,
-    programs: struct {
-        current: [MAX_PROGRAMS]Program,
-        current_len: usize,
-        next: [MAX_PROGRAMS]Program,
-        next_len: usize,
-        prev: [MAX_PROGRAMS]Program,
-        prev_len: usize,
-    },
+    programs: [3][MAX_PROGRAMS]Program,
+    program_lens: [3]usize,
+    current_idx: usize,
 
     fn init_next(self: *Evaluator, aot_bytes: []const []u8) !void {
-        for (0..self.programs.prev_len) |idx| {
-            self.programs.prev[idx].deinit();
+        const prev_idx = (self.current_idx + 2) % 3;
+        const next_idx = (self.current_idx + 1) % 3;
+
+        for (0..self.program_lens[prev_idx]) |idx| {
+            self.programs[prev_idx][idx].deinit();
         }
 
         for (0..aot_bytes.len) |idx| {
             const aot = aot_bytes[idx];
             const program = try Program.init(aot, &self.error_buf, STACK_SIZE, HEAP_SIZE);
-            self.programs.next[idx] = program;
+            self.programs[next_idx][idx] = program;
         }
-        self.programs.next_len = aot_bytes.len;
+        self.program_lens[next_idx] = aot_bytes.len;
     }
 
     pub fn next_round(self: *Evaluator, aot_bytes: []const []u8) !void {
@@ -155,11 +153,7 @@ const Evaluator = struct {
 
         const spawn_start = try std.time.Instant.now();
 
-        self.programs.prev = self.programs.current;
-        self.programs.prev_len = self.programs.current_len;
-
-        self.programs.current = self.programs.next;
-        self.programs.current_len = self.programs.next_len;
+        self.current_idx = (self.current_idx + 1) % 3;
 
         self.next_ctx = InitNextContext{
             .evaluator = self,
@@ -170,9 +164,9 @@ const Evaluator = struct {
         const spawn_duration_ns = (try std.time.Instant.now()).since(spawn_start);
         std.debug.print("Spawn duration: {d} ns\n", .{spawn_duration_ns});
 
-        for (0..self.programs.current_len) |idx| {
+        for (0..self.program_lens[self.current_idx]) |idx| {
             const start = try std.time.Instant.now();
-            const res = try self.programs.current[idx].call();
+            const res = try self.programs[self.current_idx][idx].call();
             const duration_ns = (try std.time.Instant.now()).since(start);
             std.debug.print("Program {d} executed in {d} ns with return value {d}\n", .{ idx, duration_ns, res.return_value });
             std.debug.assert(res.return_value == 1337);
@@ -201,14 +195,11 @@ const Evaluator = struct {
         return Evaluator{
             .heap_buf = heap_buf,
             .error_buf = undefined,
-            .programs = .{
-                .current = undefined,
-                .current_len = 0,
-                .next = undefined,
-                .next_len = 0,
-                .prev = undefined,
-                .prev_len = 0,
-            },
+            .programs = undefined,
+            .program_lens = [_]usize{0} ** 3,
+            .current_idx = 0,
+            .init_thread = null,
+            .next_ctx = null,
         };
     }
 
