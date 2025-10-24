@@ -7,6 +7,10 @@ mod wamr {
 
 mod unsafe_wamr_fns;
 
+// NOTE: This module is aliased here so it's easier to audit other uses of unsafe code.
+#[allow(clippy::unsafe_removed_from_name)]
+use unsafe_wamr_fns as wamr_fns;
+
 extern "C" fn ret_1337() -> u64 {
     1337
 }
@@ -25,9 +29,9 @@ pub struct Program {
 
 impl Drop for Program {
     fn drop(&mut self) {
-        unsafe_wamr_fns::wasm_runtime_destroy_exec_env(self.exec_env);
-        unsafe_wamr_fns::wasm_runtime_deinstantiate(self.instance);
-        unsafe_wamr_fns::wasm_runtime_unload(self.module);
+        wamr_fns::wasm_runtime_destroy_exec_env(self.exec_env);
+        wamr_fns::wasm_runtime_deinstantiate(self.instance);
+        wamr_fns::wasm_runtime_unload(self.module);
     }
 }
 
@@ -35,7 +39,7 @@ impl Program {
     pub fn new(aot_bytes: &mut [u8], err_buf: &mut [i8]) -> Self {
         println!("Loading WASM module...");
 
-        let module = unsafe_wamr_fns::wasm_runtime_load(
+        let module = wamr_fns::wasm_runtime_load(
             aot_bytes.as_mut_ptr(),
             aot_bytes.len().try_into().expect("should fit"),
             err_buf.as_mut_ptr(),
@@ -46,7 +50,7 @@ impl Program {
             panic!("Failed to load WASM module");
         }
 
-        let instance = unsafe_wamr_fns::wasm_runtime_instantiate(
+        let instance = wamr_fns::wasm_runtime_instantiate(
             module,
             STACK_SIZE as u32,
             HEAP_SIZE as u32,
@@ -55,24 +59,23 @@ impl Program {
         );
 
         if instance.is_null() {
-            unsafe_wamr_fns::wasm_runtime_unload(module);
+            wamr_fns::wasm_runtime_unload(module);
             panic!("Failed to instantiate WASM module");
         }
 
-        let exec_env = unsafe_wamr_fns::wasm_runtime_create_exec_env(instance, 8192);
+        let exec_env = wamr_fns::wasm_runtime_create_exec_env(instance, 8192);
         if exec_env.is_null() {
-            unsafe_wamr_fns::wasm_runtime_deinstantiate(instance);
-            unsafe_wamr_fns::wasm_runtime_unload(module);
+            wamr_fns::wasm_runtime_deinstantiate(instance);
+            wamr_fns::wasm_runtime_unload(module);
             panic!("Failed to create execution environment");
         }
 
-        let program_func =
-            unsafe_wamr_fns::wasm_runtime_lookup_function(instance, c"program".as_ptr());
+        let program_func = wamr_fns::wasm_runtime_lookup_function(instance, c"program".as_ptr());
 
         if program_func.is_null() {
-            unsafe_wamr_fns::wasm_runtime_destroy_exec_env(exec_env);
-            unsafe_wamr_fns::wasm_runtime_deinstantiate(instance);
-            unsafe_wamr_fns::wasm_runtime_unload(module);
+            wamr_fns::wasm_runtime_destroy_exec_env(exec_env);
+            wamr_fns::wasm_runtime_deinstantiate(instance);
+            wamr_fns::wasm_runtime_unload(module);
             panic!("Failed to find 'program' function");
         }
 
@@ -91,7 +94,7 @@ impl Program {
             ..Default::default()
         }];
 
-        if !unsafe_wamr_fns::wasm_runtime_call_wasm_a(
+        if !wamr_fns::wasm_runtime_call_wasm_a(
             self.exec_env,
             self.program_func,
             1,
@@ -99,7 +102,7 @@ impl Program {
             0,
             std::ptr::null_mut(),
         ) {
-            let ptr = unsafe_wamr_fns::wasm_runtime_get_exception(self.instance);
+            let ptr = wamr_fns::wasm_runtime_get_exception(self.instance);
             let msg = if ptr.is_null() {
                 "unknown WAMR exception".to_string()
             } else {
@@ -111,7 +114,7 @@ impl Program {
             panic!("WASM function call failed: {}", msg);
         }
 
-        unsafe_wamr_fns::wasm_val_t_get_i64(&call_results[0]) as u64
+        wamr_fns::wasm_val_t_get_i64(&call_results[0]) as u64
     }
 }
 
@@ -121,7 +124,7 @@ pub struct Runtime {
 
 impl Drop for Runtime {
     fn drop(&mut self) {
-        unsafe_wamr_fns::wasm_runtime_destroy();
+        wamr_fns::wasm_runtime_destroy();
     }
 }
 
@@ -139,7 +142,7 @@ impl Runtime {
             ..Default::default()
         };
 
-        if !unsafe_wamr_fns::wasm_runtime_full_init(&mut init_args as *mut wamr::RuntimeInitArgs) {
+        if !wamr_fns::wasm_runtime_full_init(&mut init_args as *mut wamr::RuntimeInitArgs) {
             panic!("Failed to initialize WAMR runtime");
         }
 
@@ -154,7 +157,7 @@ impl Runtime {
             }],
         };
 
-        if !unsafe_wamr_fns::wasm_runtime_register_natives(
+        if !wamr_fns::wasm_runtime_register_natives(
             c"env".as_ptr(),
             runtime.native_symbols.as_ptr() as *mut wamr::NativeSymbol,
             runtime.native_symbols.len() as u32,
@@ -171,8 +174,7 @@ fn main() {
     let mut aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
     let heap_buf: Vec<u8> = vec![0; HEAP_SIZE];
 
-    let t =
-        unsafe_wamr_fns::get_package_type(aot_bytes.as_ptr(), aot_bytes.len().try_into().unwrap());
+    let t = wamr_fns::get_package_type(aot_bytes.as_ptr(), aot_bytes.len().try_into().unwrap());
     println!("Package type: {}", t);
 
     let mut _runtime = Runtime::new(&mut heap_buf.clone());
