@@ -254,7 +254,7 @@ impl Evaluator {
         Ok(())
     }
 
-    pub fn next_round(&mut self, aot_bytes_vec: &[Vec<u8>]) -> Result<(), String> {
+    pub fn next_round(&mut self, aot_bytes_vec: Vec<Vec<u8>>) -> Result<(), String> {
         let join_start = Instant::now();
         if let Some(thread) = self.init_thread.take() {
             thread
@@ -269,10 +269,9 @@ impl Evaluator {
 
         let state = Arc::clone(&self.state);
         let current_idx = self.current_idx;
-        let aot_bytes_owned: Vec<Vec<u8>> = aot_bytes_vec.to_vec();
 
         self.init_thread = Some(thread::spawn(move || {
-            Self::init_next(state, current_idx, aot_bytes_owned)
+            Self::init_next(state, current_idx, aot_bytes_vec)
         }));
 
         let spawn_duration = spawn_start.elapsed();
@@ -316,7 +315,9 @@ fn main() {
 
     for i in 0..10 {
         println!("\nIteration {}:", i + 1);
-        evaluator.next_round(&aot_bytes_vec).expect("Round failed");
+        evaluator
+            .next_round(aot_bytes_vec.clone())
+            .expect("Round failed");
     }
 
     println!("\nSleeping for 1 seconds before final iteration...");
@@ -324,7 +325,7 @@ fn main() {
 
     let start = Instant::now();
     evaluator
-        .next_round(&aot_bytes_vec)
+        .next_round(aot_bytes_vec)
         .expect("Final round failed");
     let duration = start.elapsed();
     println!("Final iteration executed in {} ns", duration.as_nanos());
