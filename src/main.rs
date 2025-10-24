@@ -195,6 +195,14 @@ impl Default for Evaluator {
     }
 }
 
+impl Drop for Evaluator {
+    fn drop(&mut self) {
+        if let Some(thread) = self.init_thread.take() {
+            thread.join().ok();
+        }
+    }
+}
+
 impl Evaluator {
     pub fn new() -> Self {
         const INIT: Option<Program> = None;
