@@ -34,78 +34,90 @@ impl Drop for Program {
 impl Program {
     pub fn new(aot_bytes: &mut [u8], err_buf: &mut [i8]) -> Self {
         println!("Loading WASM module...");
-        unsafe {
-            let module = wamr::wasm_runtime_load(
+
+        let module = unsafe {
+            wamr::wasm_runtime_load(
                 aot_bytes.as_mut_ptr(),
                 aot_bytes.len().try_into().expect("should fit"),
                 err_buf.as_mut_ptr(),
                 ERROR_BUFFER_SIZE.try_into().expect("should fit"),
-            );
-            if module.is_null() {
-                panic!("Failed to load WASM module");
-            }
+            )
+        };
 
-            let instance = wamr::wasm_runtime_instantiate(
+        if module.is_null() {
+            panic!("Failed to load WASM module");
+        }
+
+        let instance = unsafe {
+            wamr::wasm_runtime_instantiate(
                 module,
                 STACK_SIZE as u32,
                 HEAP_SIZE as u32,
                 err_buf.as_mut_ptr(),
                 ERROR_BUFFER_SIZE as u32,
-            );
-            if instance.is_null() {
-                wamr::wasm_runtime_unload(module);
-                panic!("Failed to instantiate WASM module");
-            }
+            )
+        };
 
-            let exec_env = wamr::wasm_runtime_create_exec_env(instance, 8192);
-            if exec_env.is_null() {
+        if instance.is_null() {
+            unsafe {
+                wamr::wasm_runtime_unload(module);
+            }
+            panic!("Failed to instantiate WASM module");
+        }
+
+        let exec_env = unsafe { wamr::wasm_runtime_create_exec_env(instance, 8192) };
+        if exec_env.is_null() {
+            unsafe {
                 wamr::wasm_runtime_deinstantiate(instance);
                 wamr::wasm_runtime_unload(module);
-                panic!("Failed to create execution environment");
             }
+            panic!("Failed to create execution environment");
+        }
 
-            let program_func = wamr::wasm_runtime_lookup_function(instance, c"program".as_ptr());
-            if program_func.is_null() {
+        let program_func =
+            unsafe { wamr::wasm_runtime_lookup_function(instance, c"program".as_ptr()) };
+
+        if program_func.is_null() {
+            unsafe {
                 wamr::wasm_runtime_destroy_exec_env(exec_env);
                 wamr::wasm_runtime_deinstantiate(instance);
                 wamr::wasm_runtime_unload(module);
-                panic!("Failed to find 'program' function");
             }
+            panic!("Failed to find 'program' function");
+        }
 
-            Program {
-                module,
-                instance,
-                exec_env,
-                program_func,
-            }
+        Program {
+            module,
+            instance,
+            exec_env,
+            program_func,
         }
     }
 
     pub fn call(&self) -> u64 {
-        unsafe {
-            let mut call_results = [wamr::wasm_val_t {
-                kind: wamr::wasm_valkind_enum_WASM_I64.try_into().unwrap(),
-                of: wamr::wasm_val_t__bindgen_ty_1 { i64_: 0 },
-                ..Default::default()
-            }];
+        let mut call_results = [wamr::wasm_val_t {
+            kind: wamr::wasm_valkind_enum_WASM_I64.try_into().unwrap(),
+            of: wamr::wasm_val_t__bindgen_ty_1 { i64_: 0 },
+            ..Default::default()
+        }];
 
-            if !wamr::wasm_runtime_call_wasm_a(
+        if !unsafe {
+            wamr::wasm_runtime_call_wasm_a(
                 self.exec_env,
                 self.program_func,
                 1,
                 call_results.as_mut_ptr(),
                 0,
                 std::ptr::null_mut(),
-            ) {
-                let exception = wamr::wasm_runtime_get_exception(self.instance);
-                panic!(
-                    "WASM function call failed: {}",
-                    std::ffi::CStr::from_ptr(exception).to_str().unwrap()
-                );
-            }
-
-            call_results[0].of.i64_ as u64
+            )
+        } {
+            let exception = unsafe { wamr::wasm_runtime_get_exception(self.instance) };
+            panic!("WASM function call failed: {}", unsafe {
+                std::ffi::CStr::from_ptr(exception).to_str().unwrap()
+            });
         }
+
+        unsafe { call_results[0].of.i64_ as u64 }
     }
 }
 
