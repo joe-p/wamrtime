@@ -234,6 +234,9 @@ pub fn run_aot() !void {
 
     const arr = [_][]u8{
         aot_file,
+        aot_file,
+        aot_file,
+        aot_file,
     };
 
     for (0..10) |i| {

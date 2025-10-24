@@ -99,8 +99,8 @@ It has already been fully compiled. If want to a re-build, please remove /Users/
 -- Lib pthread enabled
 -- Lib wasi-threads enabled
 -- WAMR version: 2.4.3
--- Configuring done (0.2s)
--- Generating done (0.1s)
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
 -- Build files have been written to: /Users/joe/git/joe-p/wamrtime/wasm-micro-runtime/wamr-compiler/build
 + make
 [ 62%] Built target vmlib
@@ -127,57 +127,87 @@ Compile success, file /Users/joe/git/joe-p/wamrtime/zig-out/bin/program.aot was 
 + zig build run
 
 Iteration 1:
-Join duration: 41 ns
-Spawn duration: 48959 ns
+Join duration: 42 ns
+Spawn duration: 10750 ns
 
 Iteration 2:
-Join duration: 407458 ns
-Spawn duration: 43833 ns
-Program 0 executed in 3458 ns with return value 1337
+Join duration: 509917 ns
+Spawn duration: 12500 ns
+Program 0 executed in 1917 ns with return value 1337
+Program 1 executed in 458 ns with return value 1337
+Program 2 executed in 375 ns with return value 1337
+Program 3 executed in 375 ns with return value 1337
 
 Iteration 3:
-Join duration: 451292 ns
-Spawn duration: 31917 ns
-Program 0 executed in 2541 ns with return value 1337
+Join duration: 497916 ns
+Spawn duration: 9833 ns
+Program 0 executed in 625 ns with return value 1337
+Program 1 executed in 333 ns with return value 1337
+Program 2 executed in 375 ns with return value 1337
+Program 3 executed in 333 ns with return value 1337
 
 Iteration 4:
-Join duration: 461083 ns
-Spawn duration: 38250 ns
-Program 0 executed in 2542 ns with return value 1337
+Join duration: 631458 ns
+Spawn duration: 7583 ns
+Program 0 executed in 541 ns with return value 1337
+Program 1 executed in 333 ns with return value 1337
+Program 2 executed in 375 ns with return value 1337
+Program 3 executed in 375 ns with return value 1337
 
 Iteration 5:
-Join duration: 407417 ns
-Spawn duration: 30792 ns
-Program 0 executed in 2084 ns with return value 1337
+Join duration: 631084 ns
+Spawn duration: 10000 ns
+Program 0 executed in 500 ns with return value 1337
+Program 1 executed in 458 ns with return value 1337
+Program 2 executed in 334 ns with return value 1337
+Program 3 executed in 333 ns with return value 1337
 
 Iteration 6:
-Join duration: 352875 ns
-Spawn duration: 27875 ns
-Program 0 executed in 1667 ns with return value 1337
+Join duration: 582291 ns
+Spawn duration: 8042 ns
+Program 0 executed in 500 ns with return value 1337
+Program 1 executed in 333 ns with return value 1337
+Program 2 executed in 417 ns with return value 1337
+Program 3 executed in 375 ns with return value 1337
 
 Iteration 7:
-Join duration: 406833 ns
-Spawn duration: 34000 ns
-Program 0 executed in 2167 ns with return value 1337
+Join duration: 569042 ns
+Spawn duration: 8500 ns
+Program 0 executed in 459 ns with return value 1337
+Program 1 executed in 333 ns with return value 1337
+Program 2 executed in 375 ns with return value 1337
+Program 3 executed in 334 ns with return value 1337
 
 Iteration 8:
-Join duration: 374125 ns
-Spawn duration: 27125 ns
-Program 0 executed in 1375 ns with return value 1337
+Join duration: 549416 ns
+Spawn duration: 8375 ns
+Program 0 executed in 459 ns with return value 1337
+Program 1 executed in 291 ns with return value 1337
+Program 2 executed in 417 ns with return value 1337
+Program 3 executed in 333 ns with return value 1337
 
 Iteration 9:
-Join duration: 387750 ns
-Spawn duration: 32583 ns
-Program 0 executed in 1500 ns with return value 1337
+Join duration: 538458 ns
+Spawn duration: 9041 ns
+Program 0 executed in 459 ns with return value 1337
+Program 1 executed in 375 ns with return value 1337
+Program 2 executed in 333 ns with return value 1337
+Program 3 executed in 292 ns with return value 1337
 
 Iteration 10:
-Join duration: 357125 ns
-Spawn duration: 28333 ns
-Program 0 executed in 1250 ns with return value 1337
+Join duration: 573667 ns
+Spawn duration: 8209 ns
+Program 0 executed in 500 ns with return value 1337
+Program 1 executed in 333 ns with return value 1337
+Program 2 executed in 333 ns with return value 1337
+Program 3 executed in 333 ns with return value 1337
 
 Sleeping for 1 seconds before final iteration...
-Join duration: 36500 ns
-Spawn duration: 65417 ns
-Program 0 executed in 13250 ns with return value 1337
-Final iteration executed in 147709 ns
+Join duration: 63000 ns
+Spawn duration: 135917 ns
+Program 0 executed in 13083 ns with return value 1337
+Program 1 executed in 2958 ns with return value 1337
+Program 2 executed in 2750 ns with return value 1337
+Program 3 executed in 2917 ns with return value 1337
+Final iteration executed in 289333 ns
 All iterations completed successfully.
