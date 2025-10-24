@@ -1,4 +1,7 @@
 use std::ffi::c_void;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Instant;
 
 #[allow(warnings)]
 mod wamr {
@@ -27,6 +30,9 @@ pub struct Program {
     program_func: wamr::wasm_function_inst_t,
 }
 
+unsafe impl Send for Program {}
+unsafe impl Sync for Program {}
+
 impl Drop for Program {
     fn drop(&mut self) {
         wamr_fns::wasm_runtime_destroy_exec_env(self.exec_env);
@@ -37,8 +43,6 @@ impl Drop for Program {
 
 impl Program {
     pub fn new(aot_bytes: &mut [u8], err_buf: &mut [i8]) -> Self {
-        println!("Loading WASM module...");
-
         let module = wamr_fns::wasm_runtime_load(
             aot_bytes.as_mut_ptr(),
             aot_bytes.len().try_into().expect("should fit"),
@@ -170,20 +174,152 @@ impl Runtime {
     }
 }
 
+const MAX_PROGRAMS: usize = 256;
+
+type ProgramArray = [Option<Program>; MAX_PROGRAMS];
+
+struct SharedEvaluatorState {
+    programs: [ProgramArray; 3],
+    program_lens: [usize; 3],
+}
+
+pub struct Evaluator {
+    state: Arc<Mutex<SharedEvaluatorState>>,
+    current_idx: usize,
+    init_thread: Option<thread::JoinHandle<Result<(), String>>>,
+}
+
+impl Default for Evaluator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Evaluator {
+    pub fn new() -> Self {
+        const INIT: Option<Program> = None;
+        Evaluator {
+            state: Arc::new(Mutex::new(SharedEvaluatorState {
+                programs: [
+                    [INIT; MAX_PROGRAMS],
+                    [INIT; MAX_PROGRAMS],
+                    [INIT; MAX_PROGRAMS],
+                ],
+                program_lens: [0, 0, 0],
+            })),
+            current_idx: 0,
+            init_thread: None,
+        }
+    }
+
+    fn init_next(
+        state: Arc<Mutex<SharedEvaluatorState>>,
+        current_idx: usize,
+        aot_bytes_vec: Vec<Vec<u8>>,
+    ) -> Result<(), String> {
+        let prev_idx = (current_idx + 2) % 3;
+        let next_idx = (current_idx + 1) % 3;
+
+        {
+            let mut state_guard = state.lock().unwrap();
+            for idx in 0..state_guard.program_lens[prev_idx] {
+                state_guard.programs[prev_idx][idx] = None;
+            }
+        }
+
+        let len = aot_bytes_vec.len();
+        let mut new_programs = Vec::new();
+        for mut aot_bytes in aot_bytes_vec {
+            let mut err_buf = [0i8; ERROR_BUFFER_SIZE];
+            let program = Program::new(&mut aot_bytes, &mut err_buf);
+            new_programs.push(program);
+        }
+
+        {
+            let mut state_guard = state.lock().unwrap();
+            for (idx, program) in new_programs.into_iter().enumerate() {
+                state_guard.programs[next_idx][idx] = Some(program);
+            }
+            state_guard.program_lens[next_idx] = len;
+        }
+
+        Ok(())
+    }
+
+    pub fn next_round(&mut self, aot_bytes_vec: &[Vec<u8>]) -> Result<(), String> {
+        let join_start = Instant::now();
+        if let Some(thread) = self.init_thread.take() {
+            thread
+                .join()
+                .map_err(|_| "Thread join failed".to_string())??;
+        }
+        let join_duration = join_start.elapsed();
+        println!("Join duration: {} ns", join_duration.as_nanos());
+
+        let spawn_start = Instant::now();
+        self.current_idx = (self.current_idx + 1) % 3;
+
+        let state = Arc::clone(&self.state);
+        let current_idx = self.current_idx;
+        let aot_bytes_owned: Vec<Vec<u8>> = aot_bytes_vec.to_vec();
+
+        self.init_thread = Some(thread::spawn(move || {
+            Self::init_next(state, current_idx, aot_bytes_owned)
+        }));
+
+        let spawn_duration = spawn_start.elapsed();
+        println!("Spawn duration: {} ns", spawn_duration.as_nanos());
+
+        let state_guard = self.state.lock().unwrap();
+        for idx in 0..state_guard.program_lens[self.current_idx] {
+            if let Some(program) = &state_guard.programs[self.current_idx][idx] {
+                let start = Instant::now();
+                let res = program.call();
+                let duration = start.elapsed();
+                println!(
+                    "Program {} executed in {} ns with return value {}",
+                    idx,
+                    duration.as_nanos(),
+                    res
+                );
+                assert_eq!(res, 1337);
+            }
+        }
+
+        Ok(())
+    }
+}
+
 fn main() {
-    let mut aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
-    let heap_buf: Vec<u8> = vec![0; HEAP_SIZE];
+    let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
+    let mut heap_buf: Vec<u8> = vec![0; HEAP_SIZE];
 
-    let t = wamr_fns::get_package_type(aot_bytes.as_ptr(), aot_bytes.len().try_into().unwrap());
-    println!("Package type: {}", t);
-
-    let mut _runtime = Runtime::new(&mut heap_buf.clone());
+    let _runtime = Runtime::new(&mut heap_buf);
     println!("WAMR Runtime initialized.");
 
-    let mut err_buffer: [i8; ERROR_BUFFER_SIZE] = [0; ERROR_BUFFER_SIZE];
-    let program = Program::new(&mut aot_bytes, &mut err_buffer);
-    println!("WASM Program instantiated.");
+    let mut evaluator = Evaluator::new();
 
-    let result = program.call();
-    println!("WASM Program returned: {}", result);
+    let aot_bytes_vec = vec![
+        aot_bytes.clone(),
+        aot_bytes.clone(),
+        aot_bytes.clone(),
+        aot_bytes.clone(),
+    ];
+
+    for i in 0..10 {
+        println!("\nIteration {}:", i + 1);
+        evaluator.next_round(&aot_bytes_vec).expect("Round failed");
+    }
+
+    println!("\nSleeping for 1 seconds before final iteration...");
+    thread::sleep(std::time::Duration::from_millis(1000));
+
+    let start = Instant::now();
+    evaluator
+        .next_round(&aot_bytes_vec)
+        .expect("Final round failed");
+    let duration = start.elapsed();
+    println!("Final iteration executed in {} ns", duration.as_nanos());
+
+    println!("All iterations completed successfully.");
 }
