@@ -2,3 +2,8 @@
 zig-out/
 build/
 .cache/
+
+
+# Added by cargo
+
+/target

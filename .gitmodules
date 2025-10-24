@@ -1,3 +1,6 @@
 [submodule "wasm-micro-runtime"]
 	path = wasm-micro-runtime
 	url = https://github.com/bytecodealliance/wasm-micro-runtime
+[submodule "wamr-rust-sdk"]
+	path = wamr-rust-sdk
+	url = https://github.com/bytecodealliance/wamr-rust-sdk
