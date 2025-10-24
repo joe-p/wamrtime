@@ -24,9 +24,9 @@ pub struct Program {
 impl Drop for Program {
     fn drop(&mut self) {
         unsafe {
+            wamr::wasm_runtime_destroy_exec_env(self.exec_env);
             wamr::wasm_runtime_deinstantiate(self.instance);
             wamr::wasm_runtime_unload(self.module);
-            wamr::wasm_runtime_destroy_exec_env(self.exec_env);
         }
     }
 }
