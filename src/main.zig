@@ -153,6 +153,8 @@ const Evaluator = struct {
         const join_duration_ns = (try std.time.Instant.now()).since(join_start);
         std.debug.print("Join duration: {d} ns\n", .{join_duration_ns});
 
+        const spawn_start = try std.time.Instant.now();
+
         const prev = self.programs.current;
         const prev_len = self.programs.current_len;
 
@@ -172,6 +174,8 @@ const Evaluator = struct {
         };
 
         self.init_thread = try std.Thread.spawn(.{}, initNextThread, .{&self.next_ctx.?});
+        const spawn_duration_ns = (try std.time.Instant.now()).since(spawn_start);
+        std.debug.print("Spawn duration: {d} ns\n", .{spawn_duration_ns});
 
         for (0..self.programs.current_len) |idx| {
             const start = try std.time.Instant.now();
