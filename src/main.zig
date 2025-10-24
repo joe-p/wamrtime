@@ -106,10 +106,22 @@ fn initNextThread(ctx: *InitNextContext) void {
     ctx.result = ctx.evaluator.init_next(ctx.aot_bytes);
 }
 
+const DeinitProgramsContext = struct {
+    programs: [MAX_PROGRAMS]Program,
+    len: usize,
+};
+
+fn deinit_programs(ctx: *DeinitProgramsContext) void {
+    for (0..ctx.len) |idx| {
+        ctx.programs[idx].deinit();
+    }
+}
+
 const Evaluator = struct {
     heap_buf: []u8,
     error_buf: [ERROR_SIZE]u8,
     next_thread: ?std.Thread = null,
+    deinit_thread: ?std.Thread = null,
     next_ctx: ?InitNextContext = null,
     programs: struct {
         current: [MAX_PROGRAMS]Program,
@@ -136,12 +148,15 @@ const Evaluator = struct {
         const join_duration_ns = (try std.time.Instant.now()).since(join_start);
         std.debug.print("Join duration: {d} ns\n", .{join_duration_ns});
 
-        const deinit_start = try std.time.Instant.now();
-        for (0..self.programs.current_len) |idx| {
-            self.programs.current[idx].deinit();
-        }
-        const deinit_duration_ns = (try std.time.Instant.now()).since(deinit_start);
-        std.debug.print("Deinit duration: {d} ns\n", .{deinit_duration_ns});
+        const prev = self.programs.current;
+        const prev_len = self.programs.current_len;
+
+        var deinit_ctx = DeinitProgramsContext{
+            .programs = prev,
+            .len = prev_len,
+        };
+
+        self.deinit_thread = try std.Thread.spawn(.{}, deinit_programs, .{&deinit_ctx});
 
         self.programs.current = self.programs.next;
         self.programs.current_len = self.programs.next_len;
@@ -150,6 +165,11 @@ const Evaluator = struct {
             .evaluator = self,
             .aot_bytes = aot_bytes,
         };
+
+        if (self.deinit_thread) |thread| {
+            thread.join();
+            self.deinit_thread = null;
+        }
 
         self.next_thread = try std.Thread.spawn(.{}, initNextThread, .{&self.next_ctx.?});
 
@@ -227,6 +247,14 @@ pub fn run_aot() !void {
         std.debug.print("\nIteration {d}:\n", .{i + 1});
         try (&eval).next_round(&arr);
     }
+
+    std.debug.print("\nSleeping for 2 seconds before final iteration...\n", .{});
+    std.Thread.sleep(std.time.ns_per_ms * 2000);
+
+    const start = try std.time.Instant.now();
+    try (&eval).next_round(&arr);
+    const duration_ns = (try std.time.Instant.now()).since(start);
+    std.debug.print("Final iteration executed in {d} ns\n", .{duration_ns});
 
     std.debug.print("All iterations completed successfully.\n", .{});
 
