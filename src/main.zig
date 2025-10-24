@@ -109,6 +109,8 @@ fn initNextThread(ctx: *InitNextContext) void {
 const Evaluator = struct {
     heap_buf: []u8,
     error_buf: [ERROR_SIZE]u8,
+    next_thread: ?std.Thread = null,
+    next_ctx: ?InitNextContext = null,
     programs: struct {
         current: [MAX_PROGRAMS]Program,
         current_len: usize,
@@ -126,6 +128,11 @@ const Evaluator = struct {
     }
 
     pub fn next_round(self: *Evaluator, aot_bytes: []const []u8) !void {
+        if (self.next_thread) |thread| {
+            thread.join();
+            self.next_thread = null;
+        }
+
         for (0..self.programs.current_len) |idx| {
             self.programs.current[idx].deinit();
         }
@@ -133,23 +140,17 @@ const Evaluator = struct {
         self.programs.current = self.programs.next;
         self.programs.current_len = self.programs.next_len;
 
-        var ctx = InitNextContext{
+        self.next_ctx = InitNextContext{
             .evaluator = self,
             .aot_bytes = aot_bytes,
         };
 
-        const thread = try std.Thread.spawn(.{}, initNextThread, .{&ctx});
-
-        if (ctx.result) |result| {
-            try result;
-        }
+        self.next_thread = try std.Thread.spawn(.{}, initNextThread, .{&self.next_ctx.?});
 
         for (0..self.programs.current_len) |idx| {
             const res = try self.programs.current[idx].call();
             std.debug.assert(res.return_value == 1337);
         }
-
-        thread.join();
     }
 
     pub fn init(heap_buf: []u8) !Evaluator {
@@ -183,8 +184,11 @@ const Evaluator = struct {
         };
     }
 
-    pub fn deinit() void {
-        c.wasm_runtime_destroy();
+    pub fn join_thread(self: *Evaluator) !void {
+        if (self.next_thread) |thread| {
+            thread.join();
+            self.next_thread = null;
+        }
     }
 };
 
@@ -216,10 +220,13 @@ pub fn run_aot() !void {
 
     for (0..1000) |i| {
         try (&eval).next_round(&arr);
-        if (i % 100 == 0) {
-            std.debug.print("Completed {d} iterations\n", .{i});
-        }
+        std.debug.print("Completed {d} iterations\n", .{i});
     }
+
+    std.debug.print("All iterations completed successfully.\n", .{});
+
+    try eval.join_thread();
+    defer c.wasm_runtime_destroy();
 }
 
 pub fn main() !void {
