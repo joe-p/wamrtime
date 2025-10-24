@@ -141,6 +141,11 @@ const Evaluator = struct {
 
     pub fn next_round(self: *Evaluator, aot_bytes: []const []u8) !void {
         const join_start = try std.time.Instant.now();
+        if (self.deinit_thread) |thread| {
+            thread.join();
+            self.deinit_thread = null;
+        }
+
         if (self.init_thread) |thread| {
             thread.join();
             self.init_thread = null;
@@ -165,11 +170,6 @@ const Evaluator = struct {
             .evaluator = self,
             .aot_bytes = aot_bytes,
         };
-
-        if (self.deinit_thread) |thread| {
-            thread.join();
-            self.deinit_thread = null;
-        }
 
         self.init_thread = try std.Thread.spawn(.{}, initNextThread, .{&self.next_ctx.?});
 
