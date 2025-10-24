@@ -121,16 +121,21 @@ const Evaluator = struct {
     heap_buf: []u8,
     error_buf: [ERROR_SIZE]u8,
     init_thread: ?std.Thread = null,
-    deinit_thread: ?std.Thread = null,
     next_ctx: ?InitNextContext = null,
     programs: struct {
         current: [MAX_PROGRAMS]Program,
         current_len: usize,
         next: [MAX_PROGRAMS]Program,
         next_len: usize,
+        prev: [MAX_PROGRAMS]Program,
+        prev_len: usize,
     },
 
     fn init_next(self: *Evaluator, aot_bytes: []const []u8) !void {
+        for (0..self.programs.prev_len) |idx| {
+            self.programs.prev[idx].deinit();
+        }
+
         for (0..aot_bytes.len) |idx| {
             const aot = aot_bytes[idx];
             const program = try Program.init(aot, &self.error_buf, STACK_SIZE, HEAP_SIZE);
@@ -141,11 +146,6 @@ const Evaluator = struct {
 
     pub fn next_round(self: *Evaluator, aot_bytes: []const []u8) !void {
         const join_start = try std.time.Instant.now();
-        if (self.deinit_thread) |thread| {
-            thread.join();
-            self.deinit_thread = null;
-        }
-
         if (self.init_thread) |thread| {
             thread.join();
             self.init_thread = null;
@@ -155,15 +155,8 @@ const Evaluator = struct {
 
         const spawn_start = try std.time.Instant.now();
 
-        const prev = self.programs.current;
-        const prev_len = self.programs.current_len;
-
-        var deinit_ctx = DeinitProgramsContext{
-            .programs = prev,
-            .len = prev_len,
-        };
-
-        self.deinit_thread = try std.Thread.spawn(.{}, deinit_programs, .{&deinit_ctx});
+        self.programs.prev = self.programs.current;
+        self.programs.prev_len = self.programs.current_len;
 
         self.programs.current = self.programs.next;
         self.programs.current_len = self.programs.next_len;
@@ -213,6 +206,8 @@ const Evaluator = struct {
                 .current_len = 0,
                 .next = undefined,
                 .next_len = 0,
+                .prev = undefined,
+                .prev_len = 0,
             },
         };
     }
@@ -221,11 +216,6 @@ const Evaluator = struct {
         if (self.init_thread) |thread| {
             thread.join();
             self.init_thread = null;
-        }
-
-        if (self.deinit_thread) |thread| {
-            thread.join();
-            self.deinit_thread = null;
         }
 
         defer c.wasm_runtime_destroy();
