@@ -80,6 +80,33 @@ impl Program {
             }
         }
     }
+
+    pub fn call(&self) -> u64 {
+        unsafe {
+            let mut call_results = [wamr::wasm_val_t {
+                kind: wamr::wasm_valkind_enum_WASM_I64.try_into().unwrap(),
+                of: wamr::wasm_val_t__bindgen_ty_1 { i64_: 0 },
+                ..Default::default()
+            }];
+
+            if !wamr::wasm_runtime_call_wasm_a(
+                self.exec_env,
+                self.program_func,
+                1,
+                call_results.as_mut_ptr(),
+                0,
+                std::ptr::null_mut(),
+            ) {
+                let exception = wamr::wasm_runtime_get_exception(self.instance);
+                panic!(
+                    "WASM function call failed: {}",
+                    std::ffi::CStr::from_ptr(exception).to_str().unwrap()
+                );
+            }
+
+            call_results[0].of.i64_ as u64
+        }
+    }
 }
 
 pub struct Runtime {
@@ -150,7 +177,10 @@ fn main() {
         println!("WAMR Runtime initialized.");
 
         let mut err_buffer: [i8; ERROR_BUFFER_SIZE] = [0; ERROR_BUFFER_SIZE];
-        let mut _program = Program::new(&mut aot_bytes, &mut err_buffer);
+        let mut program = Program::new(&mut aot_bytes, &mut err_buffer);
         println!("WASM Program instantiated.");
+
+        let result = program.call();
+        println!("WASM Program returned: {}", result);
     }
 }
