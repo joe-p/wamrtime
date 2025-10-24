@@ -49,6 +49,9 @@ set (WAMR_BUILD_LIBC_BUILTIN 1)
 
 set (WAMR_BUILD_LIBC_WASI 0)
 
+# HW_BOUND_CHECK causes problems with Rust
+set (WAMR_DISABLE_STACK_HW_BOUND_CHECK 1)
+
 if (NOT MSVC)
   # linker flags
   if (NOT (CMAKE_C_COMPILER MATCHES ".*clang.*" OR CMAKE_C_COMPILER_ID MATCHES ".*Clang"))

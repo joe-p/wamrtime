@@ -7,15 +7,12 @@ mod wamr {
 
 fn main() {
     let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
+    const HEAP_SIZE: usize = 1024 * 1024 * 2;
+    let heap_buf: Vec<u8> = vec![0; HEAP_SIZE];
 
     unsafe {
         let t = wamr::get_package_type(aot_bytes.as_ptr(), aot_bytes.len() as u32);
         println!("Package type: {}", t);
-    }
-
-    unsafe {
-        const HEAP_SIZE: usize = 1024 * 1024 * 2;
-        let heap_buf: Vec<u8> = vec![0; HEAP_SIZE];
 
         let mut init_args = wamr::RuntimeInitArgs {
             mem_alloc_type: wamr::mem_alloc_type_t_Alloc_With_Pool,
@@ -30,5 +27,7 @@ fn main() {
         };
 
         wamr::wasm_runtime_full_init(&mut init_args as *mut wamr::RuntimeInitArgs);
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        println!("WAMR initialized");
     }
 }
