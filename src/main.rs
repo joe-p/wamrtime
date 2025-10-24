@@ -135,45 +135,45 @@ impl Drop for Runtime {
 
 impl Runtime {
     pub fn new(heap_buf: &mut [u8]) -> Self {
-        unsafe {
-            let mut init_args = wamr::RuntimeInitArgs {
-                mem_alloc_type: wamr::mem_alloc_type_t_Alloc_With_Pool,
-                running_mode: wamr::RunningMode_Mode_Interp,
-                mem_alloc_option: wamr::MemAllocOption {
-                    pool: wamr::MemAllocOption__bindgen_ty_1 {
-                        heap_buf: heap_buf.as_ptr() as *mut c_void,
-                        heap_size: HEAP_SIZE as u32,
-                    },
+        let mut init_args = wamr::RuntimeInitArgs {
+            mem_alloc_type: wamr::mem_alloc_type_t_Alloc_With_Pool,
+            running_mode: wamr::RunningMode_Mode_Interp,
+            mem_alloc_option: wamr::MemAllocOption {
+                pool: wamr::MemAllocOption__bindgen_ty_1 {
+                    heap_buf: heap_buf.as_ptr() as *mut c_void,
+                    heap_size: HEAP_SIZE as u32,
                 },
+            },
+            ..Default::default()
+        };
+
+        if !unsafe { wamr::wasm_runtime_full_init(&mut init_args as *mut wamr::RuntimeInitArgs) } {
+            panic!("Failed to initialize WAMR runtime");
+        }
+
+        println!("Registering native functions...");
+
+        let runtime = Runtime {
+            native_symbols: vec![wamr::NativeSymbol {
+                symbol: c"ret_1337".as_ptr(),
+                func_ptr: ret_1337 as *mut c_void,
+                signature: c"()I".as_ptr(),
                 ..Default::default()
-            };
+            }],
+        };
 
-            if !wamr::wasm_runtime_full_init(&mut init_args as *mut wamr::RuntimeInitArgs) {
-                panic!("Failed to initialize WAMR runtime");
-            }
-
-            println!("Registering native functions...");
-
-            let runtime = Runtime {
-                native_symbols: vec![wamr::NativeSymbol {
-                    symbol: c"ret_1337".as_ptr(),
-                    func_ptr: ret_1337 as *mut c_void,
-                    signature: c"()I".as_ptr(),
-                    ..Default::default()
-                }],
-            };
-
-            if !wamr::wasm_runtime_register_natives(
+        if !unsafe {
+            wamr::wasm_runtime_register_natives(
                 c"env".as_ptr(),
                 runtime.native_symbols.as_ptr() as *mut wamr::NativeSymbol,
                 runtime.native_symbols.len() as u32,
-            ) {
-                panic!("Failed to register native symbols");
-            }
-
-            println!("Native functions registered successfully.");
-            runtime
+            )
+        } {
+            panic!("Failed to register native symbols");
         }
+
+        println!("Native functions registered successfully.");
+        runtime
     }
 }
 
@@ -189,7 +189,7 @@ fn main() {
         println!("WAMR Runtime initialized.");
 
         let mut err_buffer: [i8; ERROR_BUFFER_SIZE] = [0; ERROR_BUFFER_SIZE];
-        let mut program = Program::new(&mut aot_bytes, &mut err_buffer);
+        let program = Program::new(&mut aot_bytes, &mut err_buffer);
         println!("WASM Program instantiated.");
 
         let result = program.call();
