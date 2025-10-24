@@ -332,38 +332,44 @@ impl Evaluator {
     }
 }
 
-fn main() {
-    unsafe {
-        set_host_function(Some(rust_host_function), std::ptr::null_mut());
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
+    #[test]
+    fn test_evaluator() {
+        unsafe {
+            set_host_function(Some(rust_host_function), std::ptr::null_mut());
+        }
 
-    let mut evaluator = Evaluator::new();
+        let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
 
-    let aot_bytes_vec = vec![
-        aot_bytes.clone(),
-        aot_bytes.clone(),
-        aot_bytes.clone(),
-        aot_bytes.clone(),
-    ];
+        let mut evaluator = Evaluator::new();
 
-    for i in 0..10 {
-        println!("\nIteration {}:", i + 1);
+        let aot_bytes_vec = vec![
+            aot_bytes.clone(),
+            aot_bytes.clone(),
+            aot_bytes.clone(),
+            aot_bytes.clone(),
+        ];
+
+        for i in 0..10 {
+            println!("\nIteration {}:", i + 1);
+            evaluator
+                .next_round(aot_bytes_vec.clone())
+                .expect("Round failed");
+        }
+
+        println!("\nSleeping for 1 seconds before final iteration...");
+        thread::sleep(std::time::Duration::from_millis(1000));
+
+        let start = Instant::now();
         evaluator
-            .next_round(aot_bytes_vec.clone())
-            .expect("Round failed");
+            .next_round(aot_bytes_vec)
+            .expect("Final round failed");
+        let duration = start.elapsed();
+        println!("Final iteration executed in {} ns", duration.as_nanos());
+
+        println!("All iterations completed successfully.");
     }
-
-    println!("\nSleeping for 1 seconds before final iteration...");
-    thread::sleep(std::time::Duration::from_millis(1000));
-
-    let start = Instant::now();
-    evaluator
-        .next_round(aot_bytes_vec)
-        .expect("Final round failed");
-    let duration = start.elapsed();
-    println!("Final iteration executed in {} ns", duration.as_nanos());
-
-    println!("All iterations completed successfully.");
 }

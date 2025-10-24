@@ -101,10 +101,6 @@ pub fn wasm_runtime_register_natives(
     unsafe { wamr::wasm_runtime_register_natives(module_name, natives, n_native_symbols) }
 }
 
-pub fn get_package_type(buf: *const u8, size: u32) -> wamr::package_type_t {
-    unsafe { wamr::get_package_type(buf, size) }
-}
-
 pub fn wasm_val_t_get_i64(v: &wamr::wasm_val_t) -> i64 {
     unsafe { v.of.i64_ }
 }
