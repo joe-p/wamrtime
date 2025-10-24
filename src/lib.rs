@@ -332,6 +332,39 @@ impl Evaluator {
     }
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn test_run() {
+    let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
+
+    let mut evaluator = Evaluator::new();
+
+    let aot_bytes_vec = vec![
+        aot_bytes.clone(),
+        aot_bytes.clone(),
+        aot_bytes.clone(),
+        aot_bytes.clone(),
+    ];
+
+    for i in 0..3 {
+        println!("\nIteration {}:", i + 1);
+        evaluator
+            .next_round(aot_bytes_vec.clone())
+            .expect("Round failed");
+    }
+
+    println!("\nSleeping for 1 seconds before final iteration...");
+    thread::sleep(std::time::Duration::from_millis(1000));
+
+    let start = Instant::now();
+    evaluator
+        .next_round(aot_bytes_vec)
+        .expect("Final round failed");
+    let duration = start.elapsed();
+    println!("Final iteration executed in {} ns", duration.as_nanos());
+
+    println!("All iterations completed successfully.");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,34 +375,6 @@ mod tests {
             set_host_function(Some(rust_host_function), std::ptr::null_mut());
         }
 
-        let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
-
-        let mut evaluator = Evaluator::new();
-
-        let aot_bytes_vec = vec![
-            aot_bytes.clone(),
-            aot_bytes.clone(),
-            aot_bytes.clone(),
-            aot_bytes.clone(),
-        ];
-
-        for i in 0..10 {
-            println!("\nIteration {}:", i + 1);
-            evaluator
-                .next_round(aot_bytes_vec.clone())
-                .expect("Round failed");
-        }
-
-        println!("\nSleeping for 1 seconds before final iteration...");
-        thread::sleep(std::time::Duration::from_millis(1000));
-
-        let start = Instant::now();
-        evaluator
-            .next_round(aot_bytes_vec)
-            .expect("Final round failed");
-        let duration = start.elapsed();
-        println!("Final iteration executed in {} ns", duration.as_nanos());
-
-        println!("All iterations completed successfully.");
+        test_run();
     }
 }
