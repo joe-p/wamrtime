@@ -14,8 +14,31 @@ mod unsafe_wamr_fns;
 #[allow(clippy::unsafe_removed_from_name)]
 use unsafe_wamr_fns as wamr_fns;
 
-extern "C" fn ret_1337() -> u64 {
-    1337
+pub type HostFunction = unsafe extern "C" fn(ctx: *mut c_void);
+
+static mut HOST_FUNCTION: Option<HostFunction> = None;
+static mut HOST_CTX: *mut c_void = core::ptr::null_mut();
+
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn set_host_function(host_fn: Option<HostFunction>, ctx: *mut c_void) {
+    unsafe {
+        HOST_FUNCTION = host_fn;
+        HOST_CTX = ctx;
+    }
+}
+
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn call_host_function() {
+    unsafe {
+        HOST_FUNCTION.expect("host function should be set")(HOST_CTX);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rust_host_function(_ctx: *mut c_void) {
+    println!("Hello from Rust!");
 }
 
 const ERROR_BUFFER_SIZE: usize = 128;
@@ -143,9 +166,9 @@ impl WamrRuntime {
     pub fn new() -> Self {
         let runtime = WamrRuntime {
             native_symbols: vec![wamr::NativeSymbol {
-                symbol: c"ret_1337".as_ptr(),
-                func_ptr: ret_1337 as *mut c_void,
-                signature: c"()I".as_ptr(),
+                symbol: c"call_host_function".as_ptr(),
+                func_ptr: call_host_function as *mut c_void,
+                signature: c"()".as_ptr(),
                 ..Default::default()
             }],
             heap: vec![0; HEAP_SIZE],
@@ -310,6 +333,10 @@ impl Evaluator {
 }
 
 fn main() {
+    unsafe {
+        set_host_function(Some(rust_host_function), std::ptr::null_mut());
+    }
+
     let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
 
     let mut evaluator = Evaluator::new();
