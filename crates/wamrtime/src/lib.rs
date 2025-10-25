@@ -13,12 +13,20 @@ mod unsafe_wamr_fns;
 
 use compiler::Compiler;
 use evaluator::Evaluator;
-use runtime::WamrRuntime;
+use runtime::{WamrHostFunction, WamrRuntime};
 
 pub type HostFunction = unsafe extern "C" fn(ctx: *mut c_void);
 
 static mut HOST_FUNCTION: Option<HostFunction> = None;
 static mut HOST_CTX: *mut c_void = core::ptr::null_mut();
+
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn call_host_function() {
+    unsafe {
+        HOST_FUNCTION.expect("host function should be set")(HOST_CTX);
+    }
+}
 
 #[allow(clippy::missing_safety_doc)]
 #[unsafe(no_mangle)]
@@ -29,19 +37,35 @@ pub unsafe extern "C" fn set_host_function(host_fn: Option<HostFunction>, ctx: *
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rust_host_function(_ctx: *mut c_void) {
-    println!("Hello from Rust!");
-}
-
 const ERROR_BUFFER_SIZE: usize = 128;
 
 const HEAP_SIZE: usize = 1024 * 1024 * 2;
 const STACK_SIZE: usize = 1024 * 128;
 
+const GAS_LIMIT: i64 = 1_000_000;
+static mut GAS_USED: i64 = 0;
+
+#[unsafe(no_mangle)]
+pub extern "C" fn host_gas_check_impl(_exec_env: *mut c_void, requested_gas: i64) {
+    unsafe {
+        GAS_USED += requested_gas;
+        if GAS_USED > GAS_LIMIT {
+            panic!("Out of gas");
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn test_run() {
-    let runtime = WamrRuntime::new();
+    let runtime = WamrRuntime::new(
+        host_gas_check_impl,
+        vec![WamrHostFunction::new(
+            "call_host_function".to_string(),
+            call_host_function as *mut c_void,
+            None,
+            None,
+        )],
+    );
 
     let mut wasm_bytes =
         std::fs::read("../../zig-out/bin/program.wasm").expect("Failed to read WASM file");
@@ -77,6 +101,11 @@ pub extern "C" fn test_run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rust_host_function(_ctx: *mut c_void) {
+        println!("Hello from Rust!");
+    }
 
     #[test]
     fn test_evaluator() {

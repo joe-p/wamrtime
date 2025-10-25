@@ -2,31 +2,15 @@ use crate::unsafe_wamr_fns;
 use crate::wamr;
 use crate::{HEAP_SIZE, HOST_CTX, HOST_FUNCTION};
 use std::ffi::c_void;
-
-#[allow(clippy::missing_safety_doc)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn call_host_function() {
-    unsafe {
-        HOST_FUNCTION.expect("host function should be set")(HOST_CTX);
-    }
-}
-
-const GAS_LIMIT: i64 = 1_000_000;
-static mut GAS_USED: i64 = 0;
-
-#[unsafe(no_mangle)]
-pub extern "C" fn host_gas_check(_exec_env: *mut c_void, requested_gas: i64) {
-    unsafe {
-        GAS_USED += requested_gas;
-        if GAS_USED > GAS_LIMIT {
-            panic!("Out of gas");
-        }
-    }
-}
+use std::fmt::Display;
 
 pub struct WamrRuntime {
     heap: Vec<u8>,
     native_symbols: Vec<wamr::NativeSymbol>,
+    // A Vec to hold CString references to ensure they live as long as the runtime
+    // This seems preferable to having to deal with lifetimes since the allocations
+    // only happen once at runtime initialization
+    _c_strings: Vec<std::ffi::CString>,
 }
 
 impl Drop for WamrRuntime {
@@ -35,30 +19,89 @@ impl Drop for WamrRuntime {
     }
 }
 
-impl Default for WamrRuntime {
-    fn default() -> Self {
-        Self::new()
+type HostGasCheckFn = unsafe extern "C" fn(exec_env: *mut c_void, requested_gas: i64);
+
+pub enum WamrType {
+    _I64,
+}
+
+impl Display for WamrType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WamrType::_I64 => write!(f, "I"),
+        }
+    }
+}
+
+pub struct WamrHostFunction {
+    name: String,
+    function: *mut c_void,
+    args: Option<Vec<WamrType>>,
+    return_type: Option<WamrType>,
+}
+
+impl WamrHostFunction {
+    pub fn new(
+        name: String,
+        function: *mut c_void,
+        args: Option<Vec<WamrType>>,
+        return_type: Option<WamrType>,
+    ) -> Self {
+        WamrHostFunction {
+            name: name.to_string(),
+            function,
+            args,
+            return_type,
+        }
+    }
+
+    pub fn signature(&self) -> String {
+        let mut signature = String::new();
+        signature.push('(');
+        if let Some(args) = &self.args {
+            for arg in args {
+                signature.push_str(&arg.to_string());
+            }
+        }
+        signature.push(')');
+        if let Some(ret_type) = &self.return_type {
+            signature.push_str(&ret_type.to_string());
+        }
+        signature
     }
 }
 
 impl WamrRuntime {
-    pub fn new() -> Self {
+    pub fn new(host_gas_check_fn: HostGasCheckFn, host_functions: Vec<WamrHostFunction>) -> Self {
+        let mut c_strings: Vec<std::ffi::CString> = vec![];
+        let mut native_symbols: Vec<wamr::NativeSymbol> = host_functions
+            .iter()
+            .map(|host_fn| {
+                c_strings.push(std::ffi::CString::new(host_fn.name.clone()).unwrap());
+                c_strings.push(std::ffi::CString::new(host_fn.signature()).unwrap());
+                let symbol = c_strings[c_strings.len() - 2].as_ptr();
+                let signature = c_strings[c_strings.len() - 1].as_ptr();
+
+                wamr::NativeSymbol {
+                    symbol,
+                    func_ptr: host_fn.function,
+                    signature,
+                    ..Default::default()
+                }
+            })
+            .collect();
+
+        native_symbols.push(wamr::NativeSymbol {
+            symbol: c"host_gas_check".as_ptr(),
+            func_ptr: host_gas_check_fn as *mut c_void,
+            signature: c"(I)".as_ptr(),
+            ..Default::default()
+        });
+
         let runtime = WamrRuntime {
-            native_symbols: vec![
-                wamr::NativeSymbol {
-                    symbol: c"call_host_function".as_ptr(),
-                    func_ptr: call_host_function as *mut c_void,
-                    signature: c"()".as_ptr(),
-                    ..Default::default()
-                },
-                wamr::NativeSymbol {
-                    symbol: c"host_gas_check".as_ptr(),
-                    func_ptr: host_gas_check as *mut c_void,
-                    signature: c"(I)".as_ptr(),
-                    ..Default::default()
-                },
-            ],
+            native_symbols,
             heap: vec![0; HEAP_SIZE],
+            _c_strings: c_strings,
         };
 
         let mut init_args = wamr::RuntimeInitArgs {
