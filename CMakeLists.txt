@@ -3,8 +3,11 @@
 
 cmake_minimum_required (VERSION 3.14)
 
+project(wamrtime C CXX)
+
 include(CheckPIESupported)
 set (CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set (CMAKE_CXX_STANDARD 17)
 
 
 ################  runtime settings  ################
@@ -67,9 +70,48 @@ endif ()
 
 # build out vmlib
 set (WAMR_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/wasm-micro-runtime)
+
+if (WAMR_BUILD_WITH_CUSTOM_LLVM)
+  find_package(LLVM REQUIRED CONFIG)
+  include_directories(${LLVM_INCLUDE_DIRS})
+  add_definitions(${LLVM_DEFINITIONS})
+  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+else()
+  set (LLVM_SRC_ROOT "${WAMR_ROOT_DIR}/core/deps/llvm")
+  if (EXISTS "${LLVM_SRC_ROOT}/build")
+    set (CMAKE_PREFIX_PATH "${LLVM_SRC_ROOT}/build;${CMAKE_PREFIX_PATH}")
+    find_package(LLVM REQUIRED CONFIG)
+    include_directories(${LLVM_INCLUDE_DIRS})
+    add_definitions(${LLVM_DEFINITIONS})
+    message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+  else()
+    message(FATAL_ERROR "LLVM not found!")
+  endif()
+endif()
+
+set (WAMR_BUILD_WAMR_COMPILER 1)
+add_definitions(-DWASM_ENABLE_WAMR_COMPILER=1)
+
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 
-add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE})
+set (SHARED_DIR ${WAMR_ROOT_DIR}/core/shared)
+set (IWASM_DIR ${WAMR_ROOT_DIR}/core/iwasm)
+
+include (${IWASM_DIR}/compilation/iwasm_compl.cmake)
+
+add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE} ${IWASM_COMPL_SOURCE})
+
+target_include_directories(vmlib PUBLIC 
+    ${IWASM_DIR}/include
+    ${SHARED_DIR}/include
+    ${LLVM_INCLUDE_DIRS}
+)
 
 check_pie_supported()
+
+if (LLVM_LINK_LLVM_DYLIB)
+  target_link_libraries(vmlib LLVM)
+else()
+  target_link_libraries(vmlib ${LLVM_AVAILABLE_LIBS})
+endif()
 
