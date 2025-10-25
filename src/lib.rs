@@ -214,20 +214,14 @@ struct SharedEvaluatorState {
     program_lens: [usize; 3],
 }
 
-pub struct Evaluator {
+pub struct Evaluator<'runtime> {
     state: Arc<Mutex<SharedEvaluatorState>>,
     current_idx: usize,
     init_thread: Option<thread::JoinHandle<Result<(), String>>>,
-    _runtime: WamrRuntime,
+    _runtime: &'runtime WamrRuntime,
 }
 
-impl Default for Evaluator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Drop for Evaluator {
+impl Drop for Evaluator<'_> {
     fn drop(&mut self) {
         if let Some(thread) = self.init_thread.take() {
             thread.join().ok();
@@ -235,8 +229,8 @@ impl Drop for Evaluator {
     }
 }
 
-impl Evaluator {
-    pub fn new() -> Self {
+impl<'runtime> Evaluator<'runtime> {
+    pub fn new(runtime: &'runtime WamrRuntime) -> Self {
         const INIT: Option<Program> = None;
         Evaluator {
             state: Arc::new(Mutex::new(SharedEvaluatorState {
@@ -249,7 +243,7 @@ impl Evaluator {
             })),
             current_idx: 0,
             init_thread: None,
-            _runtime: WamrRuntime::new(),
+            _runtime: runtime,
         }
     }
 
@@ -332,11 +326,71 @@ impl Evaluator {
     }
 }
 
+pub struct Compiler<'runtime> {
+    _runtime: &'runtime WamrRuntime,
+}
+
+impl Drop for Compiler<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            wamr::aot_compiler_destroy();
+        }
+    }
+}
+
+impl<'runtime> Compiler<'runtime> {
+    pub fn new(runtime: &'runtime WamrRuntime) -> Self {
+        unsafe {
+            wamr::aot_compiler_init();
+        }
+        Compiler { _runtime: runtime }
+    }
+
+    // wasm_module = wasm_runtime_load(wasm_file, wasm_file_size, error_buf, sizeof(error_buf));
+    //
+    // comp_data = aot_create_comp_data(wasm_module, NULL, false);
+    //
+    // comp_ctx = aot_create_comp_context(comp_data, &option);
+    //
+    // aot_compile_wasm(comp_ctx);
+
+    pub fn compile_wasm(&self, wasm_bytes: &mut [u8]) -> Vec<u8> {
+        println!("Loading WASM module for compilation...");
+        let module = wamr_fns::wasm_runtime_load(
+            wasm_bytes.as_mut_ptr(),
+            wasm_bytes.len().try_into().expect("should fit"),
+            std::ptr::null_mut(),
+            0,
+        );
+        if module.is_null() {
+            panic!("Failed to load WASM module for compilation");
+        }
+
+        println!("WASM module loaded at: {:?}", module);
+        println!("Creating compilation data...");
+
+        let comp_data = unsafe {
+            wamr::aot_create_comp_data(module as *mut c_void, c"aarch64".as_ptr(), false)
+        };
+
+        println!("Compiling WASM module...");
+        println!("Comp data created at: {:?}", comp_data);
+        vec![]
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn test_run() {
+    let runtime = WamrRuntime::new();
+
+    let mut wasm_bytes =
+        std::fs::read("zig-out/bin/program.wasm").expect("Failed to read WASM file");
+    let compiler = Compiler::new(&runtime);
+    let _compiled_aot = compiler.compile_wasm(&mut wasm_bytes);
+
     let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
 
-    let mut evaluator = Evaluator::new();
+    let mut evaluator = Evaluator::new(&runtime);
 
     let aot_bytes_vec = vec![
         aot_bytes.clone(),

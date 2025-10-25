@@ -8,7 +8,8 @@ fn main() {
     println!("cargo:rerun-if-changed={}/core", WAMR_ROOT);
 
     let mut builder = bindgen::Builder::default()
-        .header(format!("{}/core/iwasm/include/wasm_export.h", WAMR_ROOT));
+        .header(format!("{}/core/iwasm/include/wasm_export.h", WAMR_ROOT))
+        .header(format!("{}/core/iwasm/include/aot_export.h", WAMR_ROOT));
 
     builder = add_include_path(builder, "core/iwasm/include");
     builder = add_include_path(builder, "core/iwasm/interpreter");
@@ -25,7 +26,129 @@ fn main() {
 
     println!("cargo:rustc-link-search=native=build");
     println!("cargo:rustc-link-lib=static=vmlib");
+    println!("cargo:rustc-link-lib=static=aotclib");
 
+    let llvm_build = format!("{}/core/deps/llvm/build", WAMR_ROOT);
+    if std::path::Path::new(&llvm_build).exists() {
+        println!("cargo:rustc-link-search=native={}/lib", llvm_build);
+
+        let llvm_libs = [
+            "LLVMAArch64AsmParser",
+            "LLVMAArch64CodeGen",
+            "LLVMAArch64Desc",
+            "LLVMAArch64Disassembler",
+            "LLVMAArch64Info",
+            "LLVMAArch64Utils",
+            "LLVMARMAsmParser",
+            "LLVMARMCodeGen",
+            "LLVMARMDesc",
+            "LLVMARMDisassembler",
+            "LLVMARMInfo",
+            "LLVMARMUtils",
+            "LLVMMipsAsmParser",
+            "LLVMMipsCodeGen",
+            "LLVMMipsDesc",
+            "LLVMMipsDisassembler",
+            "LLVMMipsInfo",
+            "LLVMRISCVAsmParser",
+            "LLVMRISCVCodeGen",
+            "LLVMRISCVDesc",
+            "LLVMRISCVDisassembler",
+            "LLVMRISCVInfo",
+            "LLVMRISCVTargetMCA",
+            "LLVMX86AsmParser",
+            "LLVMX86CodeGen",
+            "LLVMX86Desc",
+            "LLVMX86Disassembler",
+            "LLVMX86Info",
+            "LLVMX86TargetMCA",
+            "LLVMAggressiveInstCombine",
+            "LLVMAnalysis",
+            "LLVMAsmParser",
+            "LLVMAsmPrinter",
+            "LLVMBinaryFormat",
+            "LLVMBitReader",
+            "LLVMBitstreamReader",
+            "LLVMBitWriter",
+            "LLVMCFGuard",
+            "LLVMCodeGen",
+            "LLVMCodeGenTypes",
+            "LLVMCore",
+            "LLVMCoroutines",
+            "LLVMCoverage",
+            "LLVMDebugInfoCodeView",
+            "LLVMDebugInfoDWARF",
+            "LLVMDebugInfoMSF",
+            "LLVMDebugInfoPDB",
+            "LLVMDemangle",
+            "LLVMDlltoolDriver",
+            "LLVMExecutionEngine",
+            "LLVMExtensions",
+            "LLVMFileCheck",
+            "LLVMFrontendOpenACC",
+            "LLVMFrontendOpenMP",
+            "LLVMGlobalISel",
+            "LLVMIRPrinter",
+            "LLVMIRReader",
+            "LLVMInstCombine",
+            "LLVMInstrumentation",
+            "LLVMInterfaceStub",
+            "LLVMInterpreter",
+            "LLVMJITLink",
+            "LLVMLTO",
+            "LLVMLineEditor",
+            "LLVMLinker",
+            "LLVMMC",
+            "LLVMMCA",
+            "LLVMMCDisassembler",
+            "LLVMMCJIT",
+            "LLVMMCParser",
+            "LLVMMIRParser",
+            "LLVMObjCARCOpts",
+            "LLVMObjCopy",
+            "LLVMObject",
+            "LLVMObjectYAML",
+            "LLVMOption",
+            "LLVMOrcJIT",
+            "LLVMOrcShared",
+            "LLVMOrcTargetProcess",
+            "LLVMPasses",
+            "LLVMProfileData",
+            "LLVMRemarks",
+            "LLVMRuntimeDyld",
+            "LLVMScalarOpts",
+            "LLVMSelectionDAG",
+            "LLVMSupport",
+            "LLVMSymbolize",
+            "LLVMTableGen",
+            "LLVMTableGenCommon",
+            "LLVMTableGenGlobalISel",
+            "LLVMTarget",
+            "LLVMTargetParser",
+            "LLVMTextAPI",
+            "LLVMTransformUtils",
+            "LLVMVectorize",
+            "LLVMWindowsDriver",
+            "LLVMWindowsManifest",
+            "LLVMipo",
+        ];
+
+        for lib in llvm_libs {
+            println!("cargo:rustc-link-lib=static={}", lib);
+        }
+
+        if cfg!(target_os = "macos") {
+            println!("cargo:rustc-link-lib=framework=CoreFoundation");
+        }
+    }
+
+    if cfg!(target_os = "macos") {
+        println!("cargo:rustc-link-search=native=/opt/homebrew/lib");
+    }
+
+    println!("cargo:rustc-link-lib=dylib=c++");
+    println!("cargo:rustc-link-lib=dylib=z");
+    println!("cargo:rustc-link-lib=dylib=zstd");
     println!("cargo:rustc-link-lib=dylib=c");
     println!("cargo:rustc-link-lib=dylib=m");
     println!("cargo:rustc-link-lib=dylib=dl");
@@ -39,7 +162,7 @@ fn main() {
         .derive_default(true)
         .trust_clang_mangling(false)
         .layout_tests(false)
-        .generate_comments(false)
+        .generate_comments(true)
         .generate()
         .expect("Unable to generate bindings");
 

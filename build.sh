@@ -28,4 +28,4 @@ zig build
 
 ${WAMR_DIR}/wamr-compiler/build/wamrc-2.4.3 --size-level=3 --format=aot --cpu=apple-m4 -o ${OUT_DIR}/program.aot ${OUT_DIR}/program.wasm
 
-cargo run
+cargo t
