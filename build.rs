@@ -32,6 +32,8 @@ fn main() {
         println!("cargo:rustc-link-search=native={}/lib", llvm_build);
 
         let llvm_libs = [
+            "LLVMHipStdPar",
+            "LLVMPasses",
             "LLVMAArch64AsmParser",
             "LLVMAArch64CodeGen",
             "LLVMAArch64Desc",
@@ -85,6 +87,7 @@ fn main() {
             "LLVMExtensions",
             "LLVMFileCheck",
             "LLVMFrontendOpenACC",
+            "LLVMFrontendOffloading",
             "LLVMFrontendOpenMP",
             "LLVMGlobalISel",
             "LLVMIRPrinter",
@@ -111,7 +114,6 @@ fn main() {
             "LLVMOrcJIT",
             "LLVMOrcShared",
             "LLVMOrcTargetProcess",
-            "LLVMPasses",
             "LLVMProfileData",
             "LLVMRemarks",
             "LLVMRuntimeDyld",
