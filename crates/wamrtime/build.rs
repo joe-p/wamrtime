@@ -1,4 +1,4 @@
-const WAMR_ROOT: &str = "wasm-micro-runtime";
+const WAMR_ROOT: &str = "../../wasm-micro-runtime";
 
 fn add_include_path(builder: bindgen::Builder, path: &str) -> bindgen::Builder {
     builder.clang_arg(format!("-I{}/{}", WAMR_ROOT, path))

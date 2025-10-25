@@ -334,7 +334,8 @@ impl Evaluator {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn test_run() {
-    let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
+    let aot_bytes =
+        std::fs::read("../../zig-out/bin/program.aot").expect("Failed to read AOT file");
 
     let mut evaluator = Evaluator::new();
 
