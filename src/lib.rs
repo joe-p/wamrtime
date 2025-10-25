@@ -431,6 +431,14 @@ impl<'runtime> Compiler<'runtime> {
         println!("Compiling WASM to AOT...");
         let compile_result = unsafe { wamr::aot_compile_wasm(comp_ctx) };
 
+        // TODO: PR to wamr-compiler to add a "silent" option to avoid stdout pollution
+        unsafe extern "C" {
+            fn fflush(stream: *mut std::ffi::c_void) -> std::ffi::c_int;
+        }
+        unsafe {
+            fflush(std::ptr::null_mut());
+        }
+
         if !compile_result {
             let err_ptr = unsafe { wamr::aot_get_last_error() };
             let err_msg = if err_ptr.is_null() {
