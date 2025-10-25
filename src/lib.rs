@@ -352,9 +352,6 @@ pub extern "C" fn test_run() {
             .expect("Round failed");
     }
 
-    println!("\nSleeping for 1 seconds before final iteration...");
-    thread::sleep(std::time::Duration::from_millis(1000));
-
     let start = Instant::now();
     evaluator
         .next_round(aot_bytes_vec)
