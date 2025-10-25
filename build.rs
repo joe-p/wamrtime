@@ -26,7 +26,6 @@ fn main() {
 
     println!("cargo:rustc-link-search=native=build");
     println!("cargo:rustc-link-lib=static=vmlib");
-    println!("cargo:rustc-link-lib=static=aotclib");
 
     let llvm_build = format!("{}/core/deps/llvm/build", WAMR_ROOT);
     if std::path::Path::new(&llvm_build).exists() {

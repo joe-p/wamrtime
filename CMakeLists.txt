@@ -70,11 +70,6 @@ endif ()
 
 # build out vmlib
 set (WAMR_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/wasm-micro-runtime)
-include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
-
-add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE})
-
-check_pie_supported()
 
 if (WAMR_BUILD_WITH_CUSTOM_LLVM)
   find_package(LLVM REQUIRED CONFIG)
@@ -91,28 +86,32 @@ else()
     message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
   else()
     message(FATAL_ERROR "LLVM not found!")
-
   endif()
 endif()
+
+set (WAMR_BUILD_WAMR_COMPILER 1)
+add_definitions(-DWASM_ENABLE_WAMR_COMPILER=1)
+
+include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 
 set (SHARED_DIR ${WAMR_ROOT_DIR}/core/shared)
 set (IWASM_DIR ${WAMR_ROOT_DIR}/core/iwasm)
 
-set (WAMR_BUILD_WAMR_COMPILER 1)
-
 include (${IWASM_DIR}/compilation/iwasm_compl.cmake)
 
-add_library(aotclib STATIC ${IWASM_COMPL_SOURCE})
+add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE} ${IWASM_COMPL_SOURCE})
 
-target_include_directories(aotclib PUBLIC 
+target_include_directories(vmlib PUBLIC 
     ${IWASM_DIR}/include
     ${SHARED_DIR}/include
     ${LLVM_INCLUDE_DIRS}
 )
 
+check_pie_supported()
+
 if (LLVM_LINK_LLVM_DYLIB)
-  target_link_libraries(aotclib LLVM)
+  target_link_libraries(vmlib LLVM)
 else()
-  target_link_libraries(aotclib ${LLVM_AVAILABLE_LIBS})
+  target_link_libraries(vmlib ${LLVM_AVAILABLE_LIBS})
 endif()
 

@@ -356,14 +356,18 @@ impl<'runtime> Compiler<'runtime> {
 
     pub fn compile_wasm(&self, wasm_bytes: &mut [u8]) -> Vec<u8> {
         println!("Loading WASM module for compilation...");
+        let mut err_buf = [0i8; ERROR_BUFFER_SIZE];
         let module = wamr_fns::wasm_runtime_load(
             wasm_bytes.as_mut_ptr(),
             wasm_bytes.len().try_into().expect("should fit"),
-            std::ptr::null_mut(),
-            0,
+            err_buf.as_mut_ptr(),
+            ERROR_BUFFER_SIZE.try_into().expect("should fit"),
         );
         if module.is_null() {
-            panic!("Failed to load WASM module for compilation");
+            let err_msg = unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
+                .to_string_lossy()
+                .into_owned();
+            panic!("Failed to load WASM module for compilation: {}", err_msg);
         }
 
         println!("WASM module loaded at: {:?}", module);
@@ -373,8 +377,56 @@ impl<'runtime> Compiler<'runtime> {
             wamr::aot_create_comp_data(module as *mut c_void, c"aarch64".as_ptr(), false)
         };
 
-        println!("Compiling WASM module...");
+        if comp_data.is_null() {
+            let err_ptr = unsafe { wamr::aot_get_last_error() };
+            let err_msg = if err_ptr.is_null() {
+                "unknown AOT compilation error".to_string()
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(err_ptr) }
+                    .to_string_lossy()
+                    .into_owned()
+            };
+            wamr_fns::wasm_runtime_unload(module);
+            panic!("Failed to create compilation data: {}", err_msg);
+        }
+
         println!("Comp data created at: {:?}", comp_data);
+
+        let arch = c"aarch64";
+        let mut compile_option = wamr::AOTCompOption {
+            opt_level: 3,
+            size_level: 3,
+            target_arch: arch.as_ptr() as *mut i8,
+            ..Default::default()
+        };
+
+        let comp_ctx = unsafe { wamr::aot_create_comp_context(comp_data, &mut compile_option) };
+
+        if comp_ctx.is_null() {
+            let err_ptr = unsafe { wamr::aot_get_last_error() };
+            let err_msg = if err_ptr.is_null() {
+                "unknown AOT compilation context error".to_string()
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(err_ptr) }
+                    .to_string_lossy()
+                    .into_owned()
+            };
+            unsafe {
+                wamr::aot_destroy_comp_data(comp_data);
+            }
+            wamr_fns::wasm_runtime_unload(module);
+            panic!("Failed to create compilation context: {}", err_msg);
+        }
+
+        let obj_data = unsafe { wamr::aot_obj_data_create(comp_ctx) };
+        let compiled_size = unsafe { wamr::aot_get_aot_file_size(comp_ctx, comp_data, obj_data) };
+        println!("Compiled AOT size: {} bytes", compiled_size);
+
+        unsafe {
+            wamr::aot_destroy_comp_data(comp_data);
+        }
+        wamr_fns::wasm_runtime_unload(module);
+
         vec![]
     }
 }
