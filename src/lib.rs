@@ -527,10 +527,7 @@ pub extern "C" fn test_run() {
     let mut wasm_bytes =
         std::fs::read("zig-out/bin/program.wasm").expect("Failed to read WASM file");
     let compiler = Compiler::new(&runtime);
-    let compiled_bytes = compiler.compile_wasm(&mut wasm_bytes);
-    println!("WASM compiled to AOT, size: {} bytes", compiled_bytes.len());
-
-    let aot_bytes = std::fs::read("zig-out/bin/program.aot").expect("Failed to read AOT file");
+    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
 
     let mut evaluator = Evaluator::new(&runtime);
 
