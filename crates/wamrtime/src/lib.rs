@@ -44,7 +44,7 @@ pub extern "C" fn test_run() {
     let runtime = WamrRuntime::new();
 
     let mut wasm_bytes =
-        std::fs::read("zig-out/bin/program.wasm").expect("Failed to read WASM file");
+        std::fs::read("../../zig-out/bin/program.wasm").expect("Failed to read WASM file");
     let compiler = Compiler::new(&runtime);
     let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
 

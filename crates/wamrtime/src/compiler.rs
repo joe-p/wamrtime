@@ -4,6 +4,12 @@ use crate::runtime::WamrRuntime;
 use crate::unsafe_wamr_fns;
 use crate::{ERROR_BUFFER_SIZE, wamr};
 
+use radix_wasm_instrument::{
+    gas_metering::{ConstantCostRules, host_function, inject},
+    inject_stack_limiter,
+    utils::module_info::ModuleInfo,
+};
+
 pub struct Compiler<'runtime> {
     _runtime: &'runtime WamrRuntime,
 }
@@ -24,7 +30,42 @@ impl<'runtime> Compiler<'runtime> {
         Compiler { _runtime: runtime }
     }
 
-    pub fn compile_wasm(&self, wasm_bytes: &mut [u8]) -> Vec<u8> {
+    pub fn compile_wasm(&self, raw_wasm_bytes: &mut [u8]) -> Vec<u8> {
+        let backend = host_function::Injector::new("env", "host_gas_check");
+
+        let mut module =
+            ModuleInfo::new(raw_wasm_bytes).expect("Failed to create ModuleInfo from bytes");
+
+        let gas_metered_module_bytes =
+            inject(&mut module, backend, &ConstantCostRules::new(1, 10_000, 1)).unwrap();
+
+        println!(
+            "Gas Metering: {} bytes -> {} bytes",
+            raw_wasm_bytes.len(),
+            gas_metered_module_bytes.len()
+        );
+
+        let mut gas_metered_module = ModuleInfo::new(&gas_metered_module_bytes)
+            .expect("Failed to create ModuleInfo from gas-metered bytes");
+
+        let stack_limited_and_gas_metered_module_bytes =
+            inject_stack_limiter(&mut gas_metered_module, 1000)
+                .expect("Failed to inject stack limiter");
+
+        println!(
+            "Stack Limited: {} bytes -> {} bytes",
+            gas_metered_module_bytes.len(),
+            stack_limited_and_gas_metered_module_bytes.len()
+        );
+
+        std::fs::write(
+            "build/stack_limited_and_gas_metered.wasm",
+            &stack_limited_and_gas_metered_module_bytes,
+        )
+        .unwrap();
+
+        let mut wasm_bytes = stack_limited_and_gas_metered_module_bytes;
+
         let arch = c"aarch64";
 
         // These are the default options found in wamr-compiler/main.c

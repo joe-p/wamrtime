@@ -1,15 +1,21 @@
-const WAMR_ROOT: &str = "../../wasm-micro-runtime";
+fn wamr_root() -> String {
+    std::fs::canonicalize("../../wasm-micro-runtime")
+        .expect("Failed to canonicalize wamr_root() path")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
 
 fn add_include_path(builder: bindgen::Builder, path: &str) -> bindgen::Builder {
-    builder.clang_arg(format!("-I{}/{}", WAMR_ROOT, path))
+    builder.clang_arg(format!("-I{}/{}", wamr_root(), path))
 }
 
 fn main() {
-    println!("cargo:rerun-if-changed={}/core", WAMR_ROOT);
+    println!("cargo:rerun-if-changed={}/core", wamr_root());
 
     let mut builder = bindgen::Builder::default()
-        .header(format!("{}/core/iwasm/include/wasm_export.h", WAMR_ROOT))
-        .header(format!("{}/core/iwasm/include/aot_export.h", WAMR_ROOT));
+        .header(format!("{}/core/iwasm/include/wasm_export.h", wamr_root()))
+        .header(format!("{}/core/iwasm/include/aot_export.h", wamr_root()));
 
     builder = add_include_path(builder, "core/iwasm/include");
     builder = add_include_path(builder, "core/iwasm/interpreter");
@@ -27,7 +33,7 @@ fn main() {
     println!("cargo:rustc-link-search=native=build");
     println!("cargo:rustc-link-lib=static=vmlib");
 
-    let llvm_build = format!("{}/core/deps/llvm/build", WAMR_ROOT);
+    let llvm_build = format!("{}/core/deps/llvm/build", wamr_root());
     if std::path::Path::new(&llvm_build).exists() {
         println!("cargo:rustc-link-search=native={}/lib", llvm_build);
 

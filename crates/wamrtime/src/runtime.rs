@@ -11,6 +11,19 @@ pub unsafe extern "C" fn call_host_function() {
     }
 }
 
+const GAS_LIMIT: i64 = 1_000_000;
+static mut GAS_USED: i64 = 0;
+
+#[unsafe(no_mangle)]
+pub extern "C" fn host_gas_check(_exec_env: *mut c_void, requested_gas: i64) {
+    unsafe {
+        GAS_USED += requested_gas;
+        if GAS_USED > GAS_LIMIT {
+            panic!("Out of gas");
+        }
+    }
+}
+
 pub struct WamrRuntime {
     heap: Vec<u8>,
     native_symbols: Vec<wamr::NativeSymbol>,
@@ -31,12 +44,20 @@ impl Default for WamrRuntime {
 impl WamrRuntime {
     pub fn new() -> Self {
         let runtime = WamrRuntime {
-            native_symbols: vec![wamr::NativeSymbol {
-                symbol: c"call_host_function".as_ptr(),
-                func_ptr: call_host_function as *mut c_void,
-                signature: c"()".as_ptr(),
-                ..Default::default()
-            }],
+            native_symbols: vec![
+                wamr::NativeSymbol {
+                    symbol: c"call_host_function".as_ptr(),
+                    func_ptr: call_host_function as *mut c_void,
+                    signature: c"()".as_ptr(),
+                    ..Default::default()
+                },
+                wamr::NativeSymbol {
+                    symbol: c"host_gas_check".as_ptr(),
+                    func_ptr: host_gas_check as *mut c_void,
+                    signature: c"(I)".as_ptr(),
+                    ..Default::default()
+                },
+            ],
             heap: vec![0; HEAP_SIZE],
         };
 
