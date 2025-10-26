@@ -99,6 +99,7 @@ impl<'runtime> Evaluator<'runtime> {
             Self::init_next(state, current_idx, aot_bytes_vec)
         }));
 
+        // TODO: Get programs, release guard, then execute to allow better parallelism with init
         let state_guard = self.state.lock().unwrap();
         for idx in 0..state_guard.program_lens[self.current_idx] {
             if let Some(program) = &state_guard.programs[self.current_idx][idx] {
