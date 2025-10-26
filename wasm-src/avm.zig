@@ -1,7 +1,7 @@
 const std = @import("std");
 
-extern fn host_get_global_uint(_app: u64, key_ptr: u32, len: u32) u64;
-extern fn host_set_global_uint(_app: u64, key_ptr: u32, len: u32, value: u64) void;
+extern fn avm_get_global_uint(_app: u64, key_ptr: u32, len: u32) u64;
+extern fn avm_set_global_uint(_app: u64, key_ptr: u32, len: u32, value: u64) void;
 
 // TestBlankKey:
 // app_global_get
@@ -22,14 +22,14 @@ export fn program() u64 {
     const key_slice = "";
     const key_ptr: u32 = @intFromPtr(key_slice.ptr);
 
-    var value = host_get_global_uint(app_id, key_ptr, key_slice.len);
+    var value = avm_get_global_uint(app_id, key_ptr, key_slice.len);
     if (value != 0) {
         @panic("expected initial global uint to be 0");
     }
 
-    host_set_global_uint(app_id, key_ptr, key_slice.len, 7);
+    avm_set_global_uint(app_id, key_ptr, key_slice.len, 7);
 
-    value = host_get_global_uint(app_id, key_ptr, key_slice.len);
+    value = avm_get_global_uint(app_id, key_ptr, key_slice.len);
     if (value != 7) {
         @panic("expected global uint to be 7 after setting it");
     }
