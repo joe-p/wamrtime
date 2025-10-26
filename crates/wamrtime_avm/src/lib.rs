@@ -158,7 +158,7 @@ mod tests {
             .next_round(aot_bytes_vec.clone())
             .expect("Initial round failed");
 
-        for i in 0..10 {
+        for i in 0..11 {
             println!("\nIteration {}:", i + 1);
             evaluator
                 .next_round(aot_bytes_vec.clone())
