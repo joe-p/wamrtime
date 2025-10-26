@@ -152,14 +152,13 @@ mod tests {
 
         let mut evaluator = Evaluator::new(&runtime);
 
-        let aot_bytes_vec = vec![
-            aot_bytes.clone(),
-            aot_bytes.clone(),
-            aot_bytes.clone(),
-            aot_bytes.clone(),
-        ];
+        let aot_bytes_vec = vec![aot_bytes.clone()];
 
-        for i in 0..3 {
+        evaluator
+            .next_round(aot_bytes_vec.clone())
+            .expect("Initial round failed");
+
+        for i in 0..10 {
             println!("\nIteration {}:", i + 1);
             evaluator
                 .next_round(aot_bytes_vec.clone())
@@ -169,8 +168,10 @@ mod tests {
                 i + 1,
                 GLOBAL_STATE.lock().unwrap()
             );
+            GLOBAL_STATE.lock().unwrap().clear();
         }
 
+        println!("\nFinal Iteration:");
         let start = Instant::now();
         evaluator
             .next_round(aot_bytes_vec)
