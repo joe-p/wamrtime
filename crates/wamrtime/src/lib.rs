@@ -1,5 +1,5 @@
 #[allow(warnings)]
-mod wamr {
+pub mod wamr {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 

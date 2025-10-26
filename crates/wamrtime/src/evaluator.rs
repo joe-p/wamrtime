@@ -118,7 +118,6 @@ impl<'runtime> Evaluator<'runtime> {
                     duration.as_nanos(),
                     res
                 );
-                assert_eq!(res, 1337);
             }
         }
 

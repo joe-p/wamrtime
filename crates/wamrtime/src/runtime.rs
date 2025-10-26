@@ -22,13 +22,17 @@ impl Drop for WamrRuntime {
 type HostGasCheckFn = unsafe extern "C" fn(exec_env: *mut c_void, requested_gas: i64);
 
 pub enum WamrType {
-    _I64,
+    I64,
+    I32,
+    ByteSlice,
 }
 
 impl Display for WamrType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WamrType::_I64 => write!(f, "I"),
+            WamrType::I64 => write!(f, "I"),
+            WamrType::I32 => write!(f, "i"),
+            WamrType::ByteSlice => write!(f, "*~"),
         }
     }
 }
@@ -133,4 +137,25 @@ impl WamrRuntime {
         println!("Native functions registered successfully.");
         runtime
     }
+}
+
+pub fn get_wamr_slice(exec_env: *mut wamr::WASMExecEnv, ptr: u64, size: u64) -> Vec<u8> {
+    let instance = unsafe_wamr_fns::wasm_runtime_get_module_inst(exec_env);
+    if instance.is_null() {
+        panic!("Failed to get WASM module instance from execution environment");
+    }
+
+    if unsafe_wamr_fns::wasm_runtime_validate_app_addr(instance, ptr, size) {
+        let slice_ptr = unsafe_wamr_fns::wasm_runtime_addr_app_to_native(instance, ptr);
+
+        if !slice_ptr.is_null() {
+            let slice =
+                unsafe { std::slice::from_raw_parts(slice_ptr as *const u8, size as usize) };
+            return slice.to_vec();
+        } else {
+            panic!("Failed to convert WASM address to native address");
+        }
+    }
+
+    panic!("Invalid WASM memory access at address: {}", ptr);
 }
