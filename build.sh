@@ -1,9 +1,11 @@
 #!/bin/bash
 
-ROOT=${PWD}
-WAMR_DIR=${PWD}/wasm-micro-runtime
-OUT_DIR=${PWD}/zig-out/bin
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WAMR_DIR=${ROOT}/wasm-micro-runtime
+OUT_DIR=${ROOT}/zig-out/bin
 set -ex
+
+cd ${ROOT}
 
 echo "Building WAMR vmlib with CMake..."
 
