@@ -99,15 +99,6 @@ mod tests {
         println!("Hello from Rust!");
     }
 
-    // #[test]
-    // fn test_evaluator() {
-    //     unsafe {
-    //         set_host_function(Some(rust_host_function), std::ptr::null_mut());
-    //     }
-    //
-    //     test_run();
-    // }
-
     static GLOBAL_STATE: LazyLock<Mutex<HashMap<Vec<u8>, u64>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -117,10 +108,6 @@ mod tests {
         key_ptr: u32,
         key_len: u32,
     ) -> u64 {
-        println!(
-            "rust_get_global_uint called: key_ptr={}, len={}",
-            key_ptr, key_len
-        );
         let key_vec = wamrtime::runtime::get_wamr_slice(exec_env, key_ptr as u64, key_len as u64);
         let state_guard = GLOBAL_STATE.lock().unwrap();
         *state_guard.get(&key_vec).unwrap_or(&0)
@@ -177,6 +164,11 @@ mod tests {
             evaluator
                 .next_round(aot_bytes_vec.clone())
                 .expect("Round failed");
+            println!(
+                "Iteration {} completed. Global: {:?}",
+                i + 1,
+                GLOBAL_STATE.lock().unwrap()
+            );
         }
 
         let start = Instant::now();

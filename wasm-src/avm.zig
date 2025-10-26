@@ -8,7 +8,10 @@ export fn program() u64 {
     const key_slice = "counter";
 
     const key_ptr: u32 = @intFromPtr(key_slice.ptr);
-    const counter = host_get_global_uint(app_id, key_ptr, key_slice.len);
+    var counter = host_get_global_uint(app_id, key_ptr, key_slice.len);
+    counter += 1;
+
+    host_set_global_uint(app_id, key_ptr, key_slice.len, counter);
 
     return counter;
 }
