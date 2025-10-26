@@ -1,6 +1,6 @@
+use crate::HEAP_SIZE;
 use crate::unsafe_wamr_fns;
 use crate::wamr;
-use crate::{HEAP_SIZE, HOST_CTX, HOST_FUNCTION};
 use std::ffi::c_void;
 use std::fmt::Display;
 

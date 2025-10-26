@@ -58,12 +58,6 @@ impl<'runtime> Compiler<'runtime> {
             stack_limited_and_gas_metered_module_bytes.len()
         );
 
-        std::fs::write(
-            "build/stack_limited_and_gas_metered.wasm",
-            &stack_limited_and_gas_metered_module_bytes,
-        )
-        .unwrap();
-
         let mut wasm_bytes = stack_limited_and_gas_metered_module_bytes;
 
         let arch = c"aarch64";
