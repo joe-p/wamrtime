@@ -18,19 +18,21 @@ macro_rules! avm_host_functions {
             ::paste::paste! {
                 pub type [<$fn_name:camel Fn>] = unsafe extern "C" fn(
                     exec_env: *mut wamrtime::wamr::WASMExecEnv,
+                    ctx: *mut ::std::ffi::c_void,
                     $($arg_name: $arg_type),*
                 ) $(-> $ret_type)?;
 
                 static mut [<$fn_name:snake:upper _IMPL>]: Option<[<$fn_name:camel Fn>]> = None;
 
                 extern "C" fn $fn_name(
-                    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+                    exec_env: *mut wamrtime::wamr::WASMExecEnv,
                     $($arg_name: $arg_type),*
                 ) $(-> $ret_type)? {
                     let impl_fn = unsafe {
                         [<$fn_name:snake:upper _IMPL>].expect(concat!("AVM ", stringify!($fn_name), " not set"))
                     };
-                    unsafe { impl_fn(_exec_env, $($arg_name),*) }
+                    let ctx = unsafe { AVM_CTX };
+                    unsafe { impl_fn(exec_env, ctx, $($arg_name),*) }
                 }
             }
         )*
@@ -41,10 +43,10 @@ macro_rules! avm_host_functions {
                 ctx: *mut ::std::ffi::c_void,
                 $([<$fn_name _impl>]: [<$fn_name:camel Fn>]),*
             ) {
-                if !ctx.is_null() {
-                    panic!("AVM context already set");
-                }
                 unsafe {
+                    if !AVM_CTX.is_null() {
+                        panic!("AVM context already set");
+                    }
                     AVM_CTX = ctx;
                     $(
                         [<$fn_name:snake:upper _IMPL>] = Some([<$fn_name _impl>]);
@@ -184,6 +186,7 @@ mod tests {
     #[unsafe(no_mangle)]
     pub extern "C" fn rust_impl_get_global_uint(
         _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+        _ctx: *mut c_void,
         _app: u64,
         key_ptr: *const u8,
         key_len: u32,
@@ -196,6 +199,7 @@ mod tests {
     #[unsafe(no_mangle)]
     pub extern "C" fn rust_impl_set_global_uint(
         _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+        _ctx: *mut c_void,
         _app: u64,
         key_ptr: *const u8,
         key_len: u32,

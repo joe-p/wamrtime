@@ -9,17 +9,17 @@ package main
 void test_run();
 
 // WAMR_BINDGEN SECTION_START
-typedef uint64_t (*AvmGetGlobalUintFn)(void* exec_env, uint64_t app, const uint8_t* key_ptr, uint32_t key_len);
+typedef uint64_t (*AvmGetGlobalUintFn)(void* exec_env, void* ctx, uint64_t app, const uint8_t* key_ptr, uint32_t key_len);
 
-extern uint64_t goAvmGetGlobalUint(void* exec_env, uint64_t app, uint8_t* key_ptr, uint32_t key_len);
+extern uint64_t goAvmGetGlobalUint(void* exec_env, void* ctx, uint64_t app, uint8_t* key_ptr, uint32_t key_len);
 
 static inline AvmGetGlobalUintFn getGoAvmGetGlobalUint() {
 	return (AvmGetGlobalUintFn)goAvmGetGlobalUint;
 }
 
-typedef void (*AvmSetGlobalUintFn)(void* exec_env, uint64_t app, const uint8_t* key_ptr, uint32_t key_len, uint64_t value);
+typedef void (*AvmSetGlobalUintFn)(void* exec_env, void* ctx, uint64_t app, const uint8_t* key_ptr, uint32_t key_len, uint64_t value);
 
-extern void goAvmSetGlobalUint(void* exec_env, uint64_t app, uint8_t* key_ptr, uint32_t key_len, uint64_t value);
+extern void goAvmSetGlobalUint(void* exec_env, void* ctx, uint64_t app, uint8_t* key_ptr, uint32_t key_len, uint64_t value);
 
 static inline AvmSetGlobalUintFn getGoAvmSetGlobalUint() {
 	return (AvmSetGlobalUintFn)goAvmSetGlobalUint;
@@ -33,41 +33,53 @@ import "C"
 
 import (
 	"runtime"
+	"runtime/cgo"
 	"sync"
 	"unsafe"
 )
 
-var globalState = struct {
+type State struct {
 	sync.Mutex
 	data map[string]uint64
-}{
-	data: make(map[string]uint64),
 }
 
 func main() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	C.avm_init(nil, C.getGoAvmGetGlobalUint(), C.getGoAvmSetGlobalUint())
+	state := &State{
+		data: make(map[string]uint64),
+	}
+
+	handle := cgo.NewHandle(state)
+	defer handle.Delete()
+
+	C.avm_init(unsafe.Pointer(&handle), C.getGoAvmGetGlobalUint(), C.getGoAvmSetGlobalUint())
 	C.test_run()
 }
 
 //export goAvmGetGlobalUint
-func goAvmGetGlobalUint(execEnv unsafe.Pointer, app uint64, keyPtr *C.uint8_t, keyLen C.uint32_t) uint64 {
+func goAvmGetGlobalUint(exec_env unsafe.Pointer, ctx unsafe.Pointer, app uint64, keyPtr *C.uint8_t, keyLen C.uint32_t) uint64 {
+	handle := *(*cgo.Handle)(ctx)
+	state := handle.Value().(*State)
+
 	key := C.GoBytes(unsafe.Pointer(keyPtr), C.int(keyLen))
 
-	globalState.Lock()
-	value := globalState.data[string(key)]
-	globalState.Unlock()
+	state.Lock()
+	value := state.data[string(key)]
+	state.Unlock()
 
 	return value
 }
 
 //export goAvmSetGlobalUint
-func goAvmSetGlobalUint(execEnv unsafe.Pointer, app uint64, keyPtr *C.uint8_t, keyLen C.uint32_t, value uint64) {
+func goAvmSetGlobalUint(exec_env unsafe.Pointer, ctx unsafe.Pointer, app uint64, keyPtr *C.uint8_t, keyLen C.uint32_t, value uint64) {
+	handle := *(*cgo.Handle)(ctx)
+	state := handle.Value().(*State)
+
 	key := C.GoBytes(unsafe.Pointer(keyPtr), C.int(keyLen))
 
-	globalState.Lock()
-	globalState.data[string(key)] = value
-	globalState.Unlock()
+	state.Lock()
+	state.data[string(key)] = value
+	state.Unlock()
 }

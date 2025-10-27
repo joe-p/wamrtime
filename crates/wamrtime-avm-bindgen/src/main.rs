@@ -168,8 +168,8 @@ fn generate_cgo_code(functions: &[Function]) -> String {
             .map(|t| rust_type_to_c(t))
             .unwrap_or_else(|| "void".to_string());
 
-        let mut c_params = vec!["void* exec_env".to_string()];
-        let mut go_params = vec!["void* exec_env".to_string()];
+        let mut c_params = vec!["void* exec_env".to_string(), "void* ctx".to_string()];
+        let mut go_params = vec!["void* exec_env".to_string(), "void* ctx".to_string()];
 
         for (name, rust_type) in &func.params {
             let c_type = rust_type_to_c(rust_type);
