@@ -7,4 +7,5 @@ edition = "2024"
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
+paste = "1.0.15"
 wamrtime = { version = "0.1.0", path = "../wamrtime" }

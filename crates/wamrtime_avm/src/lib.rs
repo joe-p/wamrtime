@@ -8,47 +8,38 @@ use wamrtime::runtime::{WamrHostFunction, WamrRuntime, WamrType};
 
 static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
 
-pub type AvmGetGlobalUintFn = unsafe extern "C" fn(
-    exec_env: *mut wamrtime::wamr::WASMExecEnv,
-    app: u64,
-    key_ptr: *const u8,
-    key_len: u32,
-) -> u64;
+macro_rules! avm_host_function {
+    (
+        $fn_name:ident ( $($arg_name:ident : $arg_type:ty),* $(,)? ) $(-> $ret_type:ty)?
+    ) => {
+        ::paste::paste! {
+            pub type [<$fn_name:camel Fn>] = unsafe extern "C" fn(
+                exec_env: *mut wamrtime::wamr::WASMExecEnv,
+                $($arg_name: $arg_type),*
+            ) $(-> $ret_type)?;
 
-static mut AVM_GET_GLOBAL_UINT_IMPL: Option<AvmGetGlobalUintFn> = None;
+            static mut [<$fn_name:snake:upper _IMPL>]: Option<[<$fn_name:camel Fn>]> = None;
 
-extern "C" fn avm_get_global_uint(
-    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
-    app: u64,
-    key_ptr: *const u8,
-    key_len: u32,
-) -> u64 {
-    let avm_get_global_uint_impl =
-        unsafe { AVM_GET_GLOBAL_UINT_IMPL.expect("AVM get_global_uint not set") };
-    unsafe { avm_get_global_uint_impl(_exec_env, app, key_ptr, key_len) }
+            extern "C" fn $fn_name(
+                _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+                $($arg_name: $arg_type),*
+            ) $(-> $ret_type)? {
+                let impl_fn = unsafe {
+                    [<$fn_name:snake:upper _IMPL>].expect(concat!("AVM ", stringify!($fn_name), " not set"))
+                };
+                unsafe { impl_fn(_exec_env, $($arg_name),*) }
+            }
+        }
+    };
 }
 
-pub type AvmSetGlobalUintFn = unsafe extern "C" fn(
-    exec_env: *mut wamrtime::wamr::WASMExecEnv,
-    app: u64,
-    key_ptr: *const u8,
-    key_len: u32,
-    value: u64,
+avm_host_function!(
+    avm_get_global_uint(app: u64, key_ptr: *const u8, key_len: u32) -> u64
 );
 
-static mut AVM_SET_GLOBAL_UINT_IMPL: Option<AvmSetGlobalUintFn> = None;
-
-extern "C" fn avm_set_global_uint(
-    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
-    app: u64,
-    key_ptr: *const u8,
-    key_len: u32,
-    value: u64,
-) {
-    let avm_set_global_uint_impl =
-        unsafe { AVM_SET_GLOBAL_UINT_IMPL.expect("AVM set_global_uint not set") };
-    unsafe { avm_set_global_uint_impl(_exec_env, app, key_ptr, key_len, value) }
-}
+avm_host_function!(
+    avm_set_global_uint(app: u64, key_ptr: *const u8, key_len: u32, value: u64)
+);
 
 #[unsafe(no_mangle)]
 pub extern "C" fn avm_init(
