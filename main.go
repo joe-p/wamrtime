@@ -5,10 +5,14 @@ package main
 #include <stdint.h>
 #include <stdlib.h>
 
+// The function exposed by the Rust library to run the test.
+void test_run();
+
+// Types and definitions for the AVM dispatcher.
+
 typedef uint64_t (*AvmDispatcher)(void* ctx, uint64_t function, const uint64_t* args, uint32_t arg_count, uint64_t* ret_ptr);
 
 void set_avm_dispatcher(AvmDispatcher dispatcher, void* ctx);
-void test_run();
 
 extern uint64_t goAvmDispatcher(void* ctx, uint64_t function, uint64_t* args, uint32_t arg_count, uint64_t* ret_ptr);
 
