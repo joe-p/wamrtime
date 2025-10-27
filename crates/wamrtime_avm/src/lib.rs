@@ -33,26 +33,19 @@ impl From<&AvmType> for wamrtime::runtime::WamrType {
 pub struct AvmFunction {
     name: &'static str,
     args: &'static [AvmType],
-    return_values: &'static [AvmType],
+    returns: Option<AvmType>,
     host_func: *mut c_void,
 }
 
 impl From<&AvmFunction> for wamrtime::runtime::WamrHostFunction {
     fn from(avm_func: &AvmFunction) -> Self {
         let args = avm_func.args.iter().map(WamrType::from).collect();
-        let return_type = if avm_func.return_values.is_empty() {
-            None
-        } else if avm_func.return_values.len() == 1 {
-            Some(WamrType::from(&avm_func.return_values[0]))
-        } else {
-            todo!("Multiple return values not supported yet");
-        };
 
         wamrtime::runtime::WamrHostFunction::new(
             avm_func.name.to_string(),
             avm_func.host_func,
             Some(args),
-            return_type,
+            avm_func.returns.as_ref().map(WamrType::from),
         )
     }
 }
@@ -61,13 +54,13 @@ const AVM_FUNCTIONS: &[AvmFunction] = &[
     AvmFunction {
         name: "avm_get_global_uint",
         args: &[AvmType::U64, AvmType::Bytes],
-        return_values: &[AvmType::U64],
+        returns: Some(AvmType::U64),
         host_func: avm_get_global_uint as *mut c_void,
     },
     AvmFunction {
         name: "avm_set_global_uint",
         args: &[AvmType::U64, AvmType::Bytes, AvmType::U64],
-        return_values: &[],
+        returns: None,
         host_func: avm_set_global_uint as *mut c_void,
     },
 ];
