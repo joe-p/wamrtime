@@ -50,7 +50,7 @@ extern "C" fn avm_set_global_uint(
     unsafe { avm_set_global_uint_impl(_exec_env, app, key_ptr, key_len, value) }
 }
 
-// Set all of the AVM function implementations and context
+#[unsafe(no_mangle)]
 pub extern "C" fn avm_init(
     ctx: *mut c_void,
     get_global_uint_impl: AvmGetGlobalUintFn,
