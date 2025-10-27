@@ -8,23 +8,26 @@ package main
 // The function exposed by the Rust library to run the test.
 void test_run();
 
-// Types and definitions for the AVM dispatcher.
+// Types and definitions for AVM functions.
 
 typedef uint64_t (*AvmGetGlobalUintFn)(void* exec_env, uint64_t app, const uint8_t* key_ptr, uint32_t key_len);
-typedef void (*AvmSetGlobalUintFn)(void* exec_env, uint64_t app, const uint8_t* key_ptr, uint32_t key_len, uint64_t value);
-
-void avm_init(void* ctx, AvmGetGlobalUintFn get_global_uint_impl, AvmSetGlobalUintFn set_global_uint_impl);
 
 extern uint64_t goGetGlobalUint(void* exec_env, uint64_t app, uint8_t* key_ptr, uint32_t key_len);
-extern void goSetGlobalUint(void* exec_env, uint64_t app, uint8_t* key_ptr, uint32_t key_len, uint64_t value);
 
 static inline AvmGetGlobalUintFn getGoGetGlobalUint() {
 	return (AvmGetGlobalUintFn)goGetGlobalUint;
 }
 
+extern void goSetGlobalUint(void* exec_env, uint64_t app, uint8_t* key_ptr, uint32_t key_len, uint64_t value);
+
+typedef void (*AvmSetGlobalUintFn)(void* exec_env, uint64_t app, const uint8_t* key_ptr, uint32_t key_len, uint64_t value);
+
 static inline AvmSetGlobalUintFn getGoSetGlobalUint() {
 	return (AvmSetGlobalUintFn)goSetGlobalUint;
 }
+
+// The function used to initialize the WAMR runtime with Go callbacks.
+void avm_init(void* ctx, AvmGetGlobalUintFn get_global_uint_impl, AvmSetGlobalUintFn set_global_uint_impl);
 */
 import "C"
 
