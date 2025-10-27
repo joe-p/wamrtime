@@ -1,7 +1,7 @@
 package main
 
 /*
-#cgo LDFLAGS: ${SRCDIR}/target/debug/libwamrtime_avm.a ${SRCDIR}/target/debug/libwamrtime.a -L/opt/homebrew/opt/zstd/lib -lc++ -lz -lzstd -ldl -lpthread -lm
+#cgo LDFLAGS: ${SRCDIR}/target/debug/libwamrtime_avm.a -L/opt/homebrew/opt/zstd/lib -lc++ -lz -lzstd -ldl -lpthread -lm
 #include <stdint.h>
 #include <stdlib.h>
 
