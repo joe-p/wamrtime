@@ -139,14 +139,21 @@ impl WamrRuntime {
     }
 }
 
-pub fn get_wamr_slice(exec_env: *mut wamr::WASMExecEnv, ptr: u64, size: u64) -> Vec<u8> {
+pub fn get_wamr_slice(exec_env: *mut wamr::WASMExecEnv, raw_ptr: u32, size: u32) -> Vec<u8> {
+    // TODO: firgure out why the raw_ptr has these high bits set, but only when called from Go
+    let ptr = raw_ptr & 0x00FF_FFFF;
+
+    if raw_ptr != ptr {
+        println!("Adjusted WASM pointer from {:#X} to {:#X}", raw_ptr, ptr);
+    }
+
     let instance = unsafe_wamr_fns::wasm_runtime_get_module_inst(exec_env);
     if instance.is_null() {
         panic!("Failed to get WASM module instance from execution environment");
     }
 
-    if unsafe_wamr_fns::wasm_runtime_validate_app_addr(instance, ptr, size) {
-        let slice_ptr = unsafe_wamr_fns::wasm_runtime_addr_app_to_native(instance, ptr);
+    if unsafe_wamr_fns::wasm_runtime_validate_app_addr(instance, ptr as u64, size as u64) {
+        let slice_ptr = unsafe_wamr_fns::wasm_runtime_addr_app_to_native(instance, ptr as u64);
 
         if !slice_ptr.is_null() {
             let slice =
