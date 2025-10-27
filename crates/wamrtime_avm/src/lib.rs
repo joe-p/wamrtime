@@ -1,4 +1,5 @@
 use std::ffi::c_void;
+use std::path::PathBuf;
 use std::time::Instant;
 
 use wamrtime::compiler::Compiler;
@@ -160,28 +161,31 @@ pub extern "C" fn test_run() {
         AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
     );
 
-    let path = "./zig-out/bin/avm.wasm";
-    println!("Reading WASM file from {}", path);
-    let mut wasm_bytes = std::fs::read(path).expect("Failed to read WASM file");
+    let mut wasm_path = PathBuf::from("../../zig-out/bin/avm.wasm");
+
+    if !wasm_path.exists() {
+        wasm_path = PathBuf::from("./zig-out/bin/avm.wasm");
+    }
+    let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
     let compiler = Compiler::new(&runtime);
     let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
 
     let mut evaluator = Evaluator::new(&runtime);
 
-    let aot_bytes_vec = vec![
-        aot_bytes.clone(),
-        aot_bytes.clone(),
-        aot_bytes.clone(),
-        aot_bytes.clone(),
-    ];
+    let aot_bytes_vec = vec![aot_bytes.clone()];
 
-    for i in 0..3 {
+    evaluator
+        .next_round(aot_bytes_vec.clone())
+        .expect("Initial round failed");
+
+    for i in 0..11 {
         println!("\nIteration {}:", i + 1);
         evaluator
             .next_round(aot_bytes_vec.clone())
             .expect("Round failed");
     }
 
+    println!("\nFinal Iteration:");
     let start = Instant::now();
     evaluator
         .next_round(aot_bytes_vec)
@@ -255,46 +259,7 @@ mod tests {
     fn test_avm() {
         unsafe {
             set_avm_dispatcher(rust_dispatcher_impl, std::ptr::null_mut());
+            test_run();
         }
-        let runtime = WamrRuntime::new(
-            host_gas_check_impl,
-            AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
-        );
-
-        let mut wasm_bytes =
-            std::fs::read("../../zig-out/bin/avm.wasm").expect("Failed to read WASM file");
-        let compiler = Compiler::new(&runtime);
-        let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
-
-        let mut evaluator = Evaluator::new(&runtime);
-
-        let aot_bytes_vec = vec![aot_bytes.clone()];
-
-        evaluator
-            .next_round(aot_bytes_vec.clone())
-            .expect("Initial round failed");
-
-        for i in 0..11 {
-            println!("\nIteration {}:", i + 1);
-            evaluator
-                .next_round(aot_bytes_vec.clone())
-                .expect("Round failed");
-            println!(
-                "Iteration {} completed. Global: {:?}",
-                i + 1,
-                GLOBAL_STATE.lock().unwrap()
-            );
-            GLOBAL_STATE.lock().unwrap().clear();
-        }
-
-        println!("\nFinal Iteration:");
-        let start = Instant::now();
-        evaluator
-            .next_round(aot_bytes_vec)
-            .expect("Final round failed");
-        let duration = start.elapsed();
-        println!("Final iteration executed in {} ns", duration.as_nanos());
-
-        println!("All iterations completed successfully.");
     }
 }

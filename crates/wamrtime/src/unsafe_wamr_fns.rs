@@ -7,25 +7,6 @@
 //! without any changes to the signature or behavior.
 use crate::wamr;
 
-pub fn wasm_runtime_get_module_inst(exec_env: wamr::wasm_exec_env_t) -> wamr::wasm_module_inst_t {
-    unsafe { wamr::wasm_runtime_get_module_inst(exec_env) }
-}
-
-pub fn wasm_runtime_addr_app_to_native(
-    module_inst: wamr::wasm_module_inst_t,
-    app_offset: u64,
-) -> *mut ::std::os::raw::c_void {
-    unsafe { wamr::wasm_runtime_addr_app_to_native(module_inst, app_offset) }
-}
-
-pub fn wasm_runtime_validate_app_addr(
-    module_inst: wamr::wasm_module_inst_t,
-    app_offset: u64,
-    size: u64,
-) -> bool {
-    unsafe { wamr::wasm_runtime_validate_app_addr(module_inst, app_offset, size) }
-}
-
 pub fn wasm_runtime_destroy_exec_env(exec_env: *mut wamr::WASMExecEnv) {
     unsafe {
         wamr::wasm_runtime_destroy_exec_env(exec_env);
