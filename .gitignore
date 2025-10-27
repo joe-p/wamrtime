@@ -2,7 +2,7 @@
 zig-out/
 build/
 .cache/
-
+wamrtime
 
 # Added by cargo
 
