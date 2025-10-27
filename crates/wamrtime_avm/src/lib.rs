@@ -99,7 +99,7 @@ extern "C" fn avm_get_global_uint(
     let num_returns = unsafe {
         dispatcher(
             ctx,
-            AvmFunctions::GetGlobalUint as u64,
+            AvmFunctionSelector::GetGlobalUint as u64,
             args.as_ptr(),
             args.len() as u32,
             ret.as_mut_ptr(),
@@ -126,7 +126,7 @@ extern "C" fn avm_set_global_uint(
     unsafe {
         dispatcher(
             ctx,
-            AvmFunctions::SetGlobalUint as u64,
+            AvmFunctionSelector::SetGlobalUint as u64,
             args.as_ptr(),
             args.len() as u32,
             std::ptr::null_mut(),
@@ -135,7 +135,7 @@ extern "C" fn avm_set_global_uint(
 }
 
 #[repr(u64)]
-enum AvmFunctions {
+enum AvmFunctionSelector {
     GetGlobalUint,
     SetGlobalUint,
 }
@@ -216,7 +216,7 @@ mod tests {
         ret_ptr: *mut u64,
     ) -> u64 {
         match function {
-            x if x == AvmFunctions::GetGlobalUint as u64 => {
+            x if x == AvmFunctionSelector::GetGlobalUint as u64 => {
                 assert_eq!(arg_count, 3);
                 let args = unsafe { std::slice::from_raw_parts(args, arg_count as usize) };
                 let _app = args[0];
@@ -233,7 +233,7 @@ mod tests {
 
                 1 // number of return values
             }
-            x if x == AvmFunctions::SetGlobalUint as u64 => {
+            x if x == AvmFunctionSelector::SetGlobalUint as u64 => {
                 assert_eq!(arg_count, 4);
                 let args = unsafe { std::slice::from_raw_parts(args, arg_count as usize) };
                 let _app = args[0];
