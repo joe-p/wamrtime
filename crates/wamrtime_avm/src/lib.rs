@@ -6,16 +6,65 @@ use wamrtime::compiler::Compiler;
 use wamrtime::evaluator::Evaluator;
 use wamrtime::runtime::{WamrHostFunction, WamrRuntime, WamrType};
 
-pub type AvmDispatcher = unsafe extern "C" fn(
-    ctx: *mut c_void,
-    function: u64,
-    args: *const u64,
-    arg_count: u32,
-    ret_ptr: *mut u64,
+static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
+
+pub type AvmGetGlobalUintFn = unsafe extern "C" fn(
+    exec_env: *mut wamrtime::wamr::WASMExecEnv,
+    app: u64,
+    key_ptr: *const u8,
+    key_len: u32,
 ) -> u64;
 
-static mut AVM_DISPATCHER: Option<AvmDispatcher> = None;
-static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
+static mut AVM_GET_GLOBAL_UINT_IMPL: Option<AvmGetGlobalUintFn> = None;
+
+extern "C" fn avm_get_global_uint(
+    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+    app: u64,
+    key_ptr: *const u8,
+    key_len: u32,
+) -> u64 {
+    let avm_get_global_uint_impl =
+        unsafe { AVM_GET_GLOBAL_UINT_IMPL.expect("AVM get_global_uint not set") };
+    unsafe { avm_get_global_uint_impl(_exec_env, app, key_ptr, key_len) }
+}
+
+pub type AvmSetGlobalUintFn = unsafe extern "C" fn(
+    exec_env: *mut wamrtime::wamr::WASMExecEnv,
+    app: u64,
+    key_ptr: *const u8,
+    key_len: u32,
+    value: u64,
+);
+
+static mut AVM_SET_GLOBAL_UINT_IMPL: Option<AvmSetGlobalUintFn> = None;
+
+extern "C" fn avm_set_global_uint(
+    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+    app: u64,
+    key_ptr: *const u8,
+    key_len: u32,
+    value: u64,
+) {
+    let avm_set_global_uint_impl =
+        unsafe { AVM_SET_GLOBAL_UINT_IMPL.expect("AVM set_global_uint not set") };
+    unsafe { avm_set_global_uint_impl(_exec_env, app, key_ptr, key_len, value) }
+}
+
+// Set all of the AVM function implementations and context
+pub extern "C" fn avm_init(
+    ctx: *mut c_void,
+    get_global_uint_impl: AvmGetGlobalUintFn,
+    set_global_uint_impl: AvmSetGlobalUintFn,
+) {
+    if !ctx.is_null() {
+        panic!("AVM context already set");
+    }
+    unsafe {
+        AVM_CTX = ctx;
+        AVM_GET_GLOBAL_UINT_IMPL = Some(get_global_uint_impl);
+        AVM_SET_GLOBAL_UINT_IMPL = Some(set_global_uint_impl);
+    }
+}
 
 enum AvmType {
     U64,
@@ -65,81 +114,6 @@ const AVM_FUNCTIONS: &[AvmFunction] = &[
         host_func: avm_set_global_uint as *mut c_void,
     },
 ];
-
-/// (app: u64, key_ptr: u64, key_len: u64)
-type GetGlobalUintArgs = [u64; 3];
-
-/// [u64]
-type GetGlobalUintRet = [u64; 1];
-
-/// (app: u64, key_ptr: u64, key_len: u64, value: u64)
-type SetGlobalUintArgs = [u64; 4];
-
-#[allow(clippy::missing_safety_doc)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn set_avm_dispatcher(dispatcher: AvmDispatcher, ctx: *mut c_void) {
-    unsafe {
-        AVM_DISPATCHER = Some(dispatcher);
-        AVM_CTX = ctx;
-    }
-}
-
-#[allow(clippy::missing_safety_doc)]
-extern "C" fn avm_get_global_uint(
-    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
-    app: u64,
-    key_ptr: *const u8,
-    key_len: u32,
-) -> u64 {
-    let dispatcher = unsafe { AVM_DISPATCHER.expect("AVM dispatcher not set") };
-    let ctx = unsafe { AVM_CTX };
-    let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) };
-
-    let args: GetGlobalUintArgs = [app, key.as_ptr() as u64, key.len() as u64];
-    let mut ret: GetGlobalUintRet = [0];
-    let num_returns = unsafe {
-        dispatcher(
-            ctx,
-            AvmFunctionSelector::GetGlobalUint as u64,
-            args.as_ptr(),
-            args.len() as u32,
-            ret.as_mut_ptr(),
-        )
-    };
-
-    assert_eq!(num_returns, 1, "Expected 1 return value from AVM");
-    ret[0]
-}
-
-#[allow(clippy::missing_safety_doc)]
-extern "C" fn avm_set_global_uint(
-    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
-    app: u64,
-    key_ptr: *const u8,
-    key_len: u32,
-    value: u64,
-) {
-    let dispatcher = unsafe { AVM_DISPATCHER.expect("AVM dispatcher not set") };
-    let ctx = unsafe { AVM_CTX };
-
-    let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) };
-    let args: SetGlobalUintArgs = [app, key.as_ptr() as u64, key.len() as u64, value];
-    unsafe {
-        dispatcher(
-            ctx,
-            AvmFunctionSelector::SetGlobalUint as u64,
-            args.as_ptr(),
-            args.len() as u32,
-            std::ptr::null_mut(),
-        )
-    };
-}
-
-#[repr(u64)]
-enum AvmFunctionSelector {
-    GetGlobalUint,
-    SetGlobalUint,
-}
 
 const GAS_LIMIT: i64 = 1_000_000;
 static mut GAS_USED: i64 = 0;
@@ -213,53 +187,38 @@ mod tests {
     static GLOBAL_STATE: LazyLock<Mutex<HashMap<Vec<u8>, u64>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
 
-    unsafe extern "C" fn rust_dispatcher_impl(
-        _ctx: *mut c_void,
-        function: u64,
-        args: *const u64,
-        arg_count: u32,
-        ret_ptr: *mut u64,
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rust_impl_get_global_uint(
+        _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+        _app: u64,
+        key_ptr: *const u8,
+        key_len: u32,
     ) -> u64 {
-        match function {
-            x if x == AvmFunctionSelector::GetGlobalUint as u64 => {
-                assert_eq!(arg_count, 3);
-                let args = unsafe { std::slice::from_raw_parts(args, arg_count as usize) };
-                let _app = args[0];
-                let key_ptr = args[1] as *const u8;
-                let key_len = args[2] as usize;
-                let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len) };
+        let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
+        let state = GLOBAL_STATE.lock().unwrap();
+        *state.get(&key).unwrap_or(&0)
+    }
 
-                let value = GLOBAL_STATE.lock().unwrap().get(key).cloned().unwrap_or(0);
-
-                unsafe {
-                    let ret_slice = std::slice::from_raw_parts_mut(ret_ptr, 1);
-                    ret_slice[0] = value;
-                }
-
-                1 // number of return values
-            }
-            x if x == AvmFunctionSelector::SetGlobalUint as u64 => {
-                assert_eq!(arg_count, 4);
-                let args = unsafe { std::slice::from_raw_parts(args, arg_count as usize) };
-                let _app = args[0];
-                let key_ptr = args[1] as *const u8;
-                let key_len = args[2] as usize;
-                let value = args[3];
-                let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len) };
-
-                GLOBAL_STATE.lock().unwrap().insert(key.to_vec(), value);
-
-                0 // number of return values
-            }
-            _ => panic!("Unknown function ID: {}", function),
-        }
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rust_impl_set_global_uint(
+        _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+        _app: u64,
+        key_ptr: *const u8,
+        key_len: u32,
+        value: u64,
+    ) {
+        let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
+        let mut state = GLOBAL_STATE.lock().unwrap();
+        state.insert(key, value);
     }
 
     #[test]
     fn test_avm() {
-        unsafe {
-            set_avm_dispatcher(rust_dispatcher_impl, std::ptr::null_mut());
-            test_run();
-        }
+        avm_init(
+            std::ptr::null_mut(),
+            rust_impl_get_global_uint,
+            rust_impl_set_global_uint,
+        );
+        test_run();
     }
 }
