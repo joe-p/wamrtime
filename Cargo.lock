@@ -303,6 +303,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "wamrtime-avm-bindgen"
+version = "0.1.0"
+
+[[package]]
 name = "wamrtime_avm"
 version = "0.1.0"
 dependencies = [

@@ -8,26 +8,26 @@ package main
 // The function exposed by the Rust library to run the test.
 void test_run();
 
-// Types and definitions for AVM functions.
-
+// WAMR_BINDGEN SECTION_START
 typedef uint64_t (*AvmGetGlobalUintFn)(void* exec_env, uint64_t app, const uint8_t* key_ptr, uint32_t key_len);
 
-extern uint64_t goGetGlobalUint(void* exec_env, uint64_t app, uint8_t* key_ptr, uint32_t key_len);
+extern uint64_t goAvmGetGlobalUint(void* exec_env, uint64_t app, uint8_t* key_ptr, uint32_t key_len);
 
-static inline AvmGetGlobalUintFn getGoGetGlobalUint() {
-	return (AvmGetGlobalUintFn)goGetGlobalUint;
+static inline AvmGetGlobalUintFn getGoAvmGetGlobalUint() {
+	return (AvmGetGlobalUintFn)goAvmGetGlobalUint;
 }
-
-extern void goSetGlobalUint(void* exec_env, uint64_t app, uint8_t* key_ptr, uint32_t key_len, uint64_t value);
 
 typedef void (*AvmSetGlobalUintFn)(void* exec_env, uint64_t app, const uint8_t* key_ptr, uint32_t key_len, uint64_t value);
 
-static inline AvmSetGlobalUintFn getGoSetGlobalUint() {
-	return (AvmSetGlobalUintFn)goSetGlobalUint;
+extern void goAvmSetGlobalUint(void* exec_env, uint64_t app, uint8_t* key_ptr, uint32_t key_len, uint64_t value);
+
+static inline AvmSetGlobalUintFn getGoAvmSetGlobalUint() {
+	return (AvmSetGlobalUintFn)goAvmSetGlobalUint;
 }
 
-// The function used to initialize the WAMR runtime with Go callbacks.
-void avm_init(void* ctx, AvmGetGlobalUintFn get_global_uint_impl, AvmSetGlobalUintFn set_global_uint_impl);
+void avm_init(void* ctx, AvmGetGlobalUintFn avm_get_global_uint_impl, AvmSetGlobalUintFn avm_set_global_uint_impl);
+// WAMR_BINDGEN SECTION_END
+
 */
 import "C"
 
@@ -48,12 +48,12 @@ func main() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	C.avm_init(nil, C.getGoGetGlobalUint(), C.getGoSetGlobalUint())
+	C.avm_init(nil, C.getGoAvmGetGlobalUint(), C.getGoAvmSetGlobalUint())
 	C.test_run()
 }
 
-//export goGetGlobalUint
-func goGetGlobalUint(execEnv unsafe.Pointer, app uint64, keyPtr *C.uint8_t, keyLen C.uint32_t) uint64 {
+//export goAvmGetGlobalUint
+func goAvmGetGlobalUint(execEnv unsafe.Pointer, app uint64, keyPtr *C.uint8_t, keyLen C.uint32_t) uint64 {
 	key := C.GoBytes(unsafe.Pointer(keyPtr), C.int(keyLen))
 
 	globalState.Lock()
@@ -63,8 +63,8 @@ func goGetGlobalUint(execEnv unsafe.Pointer, app uint64, keyPtr *C.uint8_t, keyL
 	return value
 }
 
-//export goSetGlobalUint
-func goSetGlobalUint(execEnv unsafe.Pointer, app uint64, keyPtr *C.uint8_t, keyLen C.uint32_t, value uint64) {
+//export goAvmSetGlobalUint
+func goAvmSetGlobalUint(execEnv unsafe.Pointer, app uint64, keyPtr *C.uint8_t, keyLen C.uint32_t, value uint64) {
 	key := C.GoBytes(unsafe.Pointer(keyPtr), C.int(keyLen))
 
 	globalState.Lock()
