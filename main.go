@@ -32,21 +32,15 @@ void avm_init(void* ctx, AvmGetGlobalUintFn avm_get_global_uint_impl, AvmSetGlob
 import "C"
 
 import (
-	"runtime"
 	"runtime/cgo"
-	"sync"
 	"unsafe"
 )
 
 type State struct {
-	sync.Mutex
 	data map[string]uint64
 }
 
 func main() {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
 	state := &State{
 		data: make(map[string]uint64),
 	}
@@ -65,9 +59,7 @@ func goAvmGetGlobalUint(exec_env unsafe.Pointer, ctx unsafe.Pointer, app uint64,
 
 	key := C.GoBytes(unsafe.Pointer(keyPtr), C.int(keyLen))
 
-	state.Lock()
 	value := state.data[string(key)]
-	state.Unlock()
 
 	return value
 }
@@ -79,7 +71,5 @@ func goAvmSetGlobalUint(exec_env unsafe.Pointer, ctx unsafe.Pointer, app uint64,
 
 	key := C.GoBytes(unsafe.Pointer(keyPtr), C.int(keyLen))
 
-	state.Lock()
 	state.data[string(key)] = value
-	state.Unlock()
 }
