@@ -85,20 +85,15 @@ pub unsafe extern "C" fn set_avm_dispatcher(dispatcher: AvmDispatcher, ctx: *mut
 
 #[allow(clippy::missing_safety_doc)]
 extern "C" fn avm_get_global_uint(
-    exec_env: *mut wamrtime::wamr::WASMExecEnv,
+    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
     app: u64,
-    key_ptr: u32,
+    key_ptr: *const u8,
     key_len: u32,
 ) -> u64 {
     let dispatcher = unsafe { AVM_DISPATCHER.expect("AVM dispatcher not set") };
     let ctx = unsafe { AVM_CTX };
+    let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) };
 
-    println!(
-        "avm_get_global_uint called with app: {}, key_ptr: {}, key_len: {}",
-        app, key_ptr, key_len
-    );
-
-    let key = wamrtime::runtime::get_wamr_slice(exec_env, key_ptr, key_len);
     let args: GetGlobalUintArgs = [app, key.as_ptr() as u64, key.len() as u64];
     let mut ret: GetGlobalUintRet = [0];
     let num_returns = unsafe {
@@ -117,20 +112,16 @@ extern "C" fn avm_get_global_uint(
 
 #[allow(clippy::missing_safety_doc)]
 extern "C" fn avm_set_global_uint(
-    exec_env: *mut wamrtime::wamr::WASMExecEnv,
+    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
     app: u64,
-    key_ptr: u32,
+    key_ptr: *const u8,
     key_len: u32,
     value: u64,
 ) {
     let dispatcher = unsafe { AVM_DISPATCHER.expect("AVM dispatcher not set") };
     let ctx = unsafe { AVM_CTX };
 
-    println!(
-        "avm_set_global_uint called with app: {}, key_ptr: {}, key_len: {}, value: {}",
-        app, key_ptr, key_len, value
-    );
-    let key = wamrtime::runtime::get_wamr_slice(exec_env, key_ptr, key_len);
+    let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) };
     let args: SetGlobalUintArgs = [app, key.as_ptr() as u64, key.len() as u64, value];
     unsafe {
         dispatcher(

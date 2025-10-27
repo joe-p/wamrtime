@@ -139,30 +139,25 @@ impl WamrRuntime {
     }
 }
 
-pub fn get_wamr_slice(exec_env: *mut wamr::WASMExecEnv, raw_ptr: u32, size: u32) -> Vec<u8> {
-    // TODO: firgure out why the raw_ptr has these high bits set, but only when called from Go
-    let ptr = raw_ptr & 0x00FF_FFFF;
-
-    if raw_ptr != ptr {
-        println!("Adjusted WASM pointer from {:#X} to {:#X}", raw_ptr, ptr);
-    }
-
-    let instance = unsafe_wamr_fns::wasm_runtime_get_module_inst(exec_env);
-    if instance.is_null() {
-        panic!("Failed to get WASM module instance from execution environment");
-    }
-
-    if unsafe_wamr_fns::wasm_runtime_validate_app_addr(instance, ptr as u64, size as u64) {
-        let slice_ptr = unsafe_wamr_fns::wasm_runtime_addr_app_to_native(instance, ptr as u64);
-
-        if !slice_ptr.is_null() {
-            let slice =
-                unsafe { std::slice::from_raw_parts(slice_ptr as *const u8, size as usize) };
-            return slice.to_vec();
-        } else {
-            panic!("Failed to convert WASM address to native address");
-        }
-    }
-
-    panic!("Invalid WASM memory access at address: {}", ptr);
-}
+// TODO: PR documentation to wasm_export.h to note that * in native symbol sig is automatically converted to a native pointer
+//
+// pub fn get_wamr_slice(exec_env: *mut wamr::WASMExecEnv, ptr: u32, size: u32) -> Vec<u8> {
+//     let instance = unsafe_wamr_fns::wasm_runtime_get_module_inst(exec_env);
+//     if instance.is_null() {
+//         panic!("Failed to get WASM module instance from execution environment");
+//     }
+//
+//     if unsafe_wamr_fns::wasm_runtime_validate_app_addr(instance, ptr as u64, size as u64) {
+//         let slice_ptr = unsafe_wamr_fns::wasm_runtime_addr_app_to_native(instance, ptr as u64);
+//
+//         if !slice_ptr.is_null() {
+//             let slice =
+//                 unsafe { std::slice::from_raw_parts(slice_ptr as *const u8, size as usize) };
+//             return slice.to_vec();
+//         } else {
+//             panic!("Failed to convert WASM address to native address");
+//         }
+//     }
+//
+//     panic!("Invalid WASM memory access at address: {}", ptr);
+// }
