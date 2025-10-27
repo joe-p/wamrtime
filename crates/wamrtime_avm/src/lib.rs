@@ -160,8 +160,9 @@ pub extern "C" fn test_run() {
         AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
     );
 
-    let mut wasm_bytes =
-        std::fs::read("../../zig-out/bin/program.wasm").expect("Failed to read WASM file");
+    let path = "./zig-out/bin/avm.wasm";
+    println!("Reading WASM file from {}", path);
+    let mut wasm_bytes = std::fs::read(path).expect("Failed to read WASM file");
     let compiler = Compiler::new(&runtime);
     let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
 

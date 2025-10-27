@@ -1,59 +1,87 @@
 package main
 
 /*
-#cgo LDFLAGS: ${SRCDIR}/target/debug/libwamrtime.a -ldl -lpthread -lm
+#cgo LDFLAGS: ${SRCDIR}/target/debug/libwamrtime_avm.a ${SRCDIR}/target/debug/libwamrtime.a -L/opt/homebrew/opt/zstd/lib -lc++ -lz -lzstd -ldl -lpthread -lm
 #include <stdint.h>
 #include <stdlib.h>
 
-typedef void (*HostFunction)(void* ctx);
+typedef uint64_t (*AvmDispatcher)(void* ctx, uint64_t function, const uint64_t* args, uint32_t arg_count, uint64_t* ret_ptr);
 
-// These are provided by Go via //export (below).
-extern void goHostFunction(void* ctx);
-
-// Helper to get a function pointer with correct type in C
-static inline HostFunction getGoHostFunction() { return (HostFunction)goHostFunction; }
-
-// Rust functions we link to:
-void set_host_function(HostFunction cb, void* ctx);
+void set_avm_dispatcher(AvmDispatcher dispatcher, void* ctx);
 void test_run();
+
+extern uint64_t goAvmDispatcher(void* ctx, uint64_t function, uint64_t* args, uint32_t arg_count, uint64_t* ret_ptr);
+
+static inline AvmDispatcher getGoDispatcher() {
+	return (AvmDispatcher)goAvmDispatcher;
+}
 */
 import "C"
 
 import (
 	"fmt"
 	"runtime"
-	"runtime/cgo"
+	"sync"
 	"unsafe"
 )
 
-// The Go function we actually want to run when Rust calls back.
-type Handler func(code int32, msg []byte)
+const (
+	AvmFunctionGetGlobalUint = 0
+	AvmFunctionSetGlobalUint = 1
+)
+
+var globalState = struct {
+	sync.Mutex
+	data map[string]uint64
+}{
+	data: make(map[string]uint64),
+}
 
 func main() {
-	// If you care about strict same-thread execution for callbacks, you may lock.
-	// This ensures Rust's synchronous callback happens on the calling OS thread.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	// Create a Go handler (could be a closure capturing state).
-	h := func() {
-		fmt.Printf("Go handler")
-	}
-
-	// Wrap it in a cgo.Handle so we can pass an opaque pointer to Rust.
-	handle := cgo.NewHandle(h)
-	defer handle.Delete() // Delete when Rust will no longer call back with this ctx.
-
-	// “Store and trigger” example:
-	C.set_host_function(C.getGoHostFunction(), unsafe.Pointer(handle))
-
+	C.set_avm_dispatcher(C.getGoDispatcher(), nil)
 	C.test_run()
 }
 
-//export goHostFunction
-func goHostFunction(ctx unsafe.Pointer) {
-	// Recover the Go handler from the handle
-	// h := cgo.Handle(ctx).Value().(Handler)
+//export goAvmDispatcher
+func goAvmDispatcher(ctx unsafe.Pointer, function uint64, args *uint64, argCount uint32, retPtr *uint64) uint64 {
+	argsSlice := unsafe.Slice(args, argCount)
 
-	fmt.Println("goHostFunction called from Rust")
+	switch function {
+	case AvmFunctionGetGlobalUint:
+		if argCount != 3 {
+			panic(fmt.Sprintf("GetGlobalUint expected 3 args, got %d", argCount))
+		}
+		keyPtr := (*byte)(unsafe.Pointer(uintptr(argsSlice[1])))
+		keyLen := int(argsSlice[2])
+		key := unsafe.Slice(keyPtr, keyLen)
+
+		globalState.Lock()
+		value := globalState.data[string(key)]
+		globalState.Unlock()
+
+		retSlice := unsafe.Slice(retPtr, 1)
+		retSlice[0] = value
+		return 1
+
+	case AvmFunctionSetGlobalUint:
+		if argCount != 4 {
+			panic(fmt.Sprintf("SetGlobalUint expected 4 args, got %d", argCount))
+		}
+		keyPtr := (*byte)(unsafe.Pointer(uintptr(argsSlice[1])))
+		keyLen := int(argsSlice[2])
+		key := unsafe.Slice(keyPtr, keyLen)
+		value := argsSlice[3]
+
+		globalState.Lock()
+		globalState.data[string(key)] = value
+		globalState.Unlock()
+
+		return 0
+
+	default:
+		panic(fmt.Sprintf("Unknown function ID: %d", function))
+	}
 }
