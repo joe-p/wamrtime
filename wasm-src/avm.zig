@@ -19,7 +19,7 @@ extern fn avm_set_global_uint(_app: u64, key_ptr: u32, len: u32, value: u64) voi
 // ==
 export fn program() u64 {
     const app_id: u64 = 42;
-    const key_slice = "";
+    const key_slice = "foo";
     const key_ptr: u32 = @intFromPtr(key_slice.ptr);
 
     var value = avm_get_global_uint(app_id, key_ptr, key_slice.len);
@@ -33,6 +33,8 @@ export fn program() u64 {
     if (value != 7) {
         @panic("expected global uint to be 7 after setting it");
     }
+
+    avm_set_global_uint(app_id, key_ptr, key_slice.len, 0);
 
     return 0;
 }

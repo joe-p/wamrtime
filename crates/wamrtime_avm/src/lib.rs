@@ -93,6 +93,10 @@ extern "C" fn avm_get_global_uint(
     let dispatcher = unsafe { AVM_DISPATCHER.expect("AVM dispatcher not set") };
     let ctx = unsafe { AVM_CTX };
 
+    println!(
+        "avm_get_global_uint called with app: {}, key_ptr: {}, key_len: {}",
+        app, key_ptr, key_len
+    );
     let key = wamrtime::runtime::get_wamr_slice(exec_env, key_ptr as u64, key_len as u64);
     let args: GetGlobalUintArgs = [app, key.as_ptr() as u64, key.len() as u64];
     let mut ret: GetGlobalUintRet = [0];
@@ -121,6 +125,10 @@ extern "C" fn avm_set_global_uint(
     let dispatcher = unsafe { AVM_DISPATCHER.expect("AVM dispatcher not set") };
     let ctx = unsafe { AVM_CTX };
 
+    println!(
+        "avm_set_global_uint called with app: {}, key_ptr: {}, key_len: {}, value: {}",
+        app, key_ptr, key_len, value
+    );
     let key = wamrtime::runtime::get_wamr_slice(exec_env, key_ptr as u64, key_len as u64);
     let args: SetGlobalUintArgs = [app, key.as_ptr() as u64, key.len() as u64, value];
     unsafe {
