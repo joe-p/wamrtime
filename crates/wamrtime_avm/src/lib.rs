@@ -8,53 +8,56 @@ use wamrtime::runtime::{WamrHostFunction, WamrRuntime, WamrType};
 
 static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
 
-macro_rules! avm_host_function {
+macro_rules! avm_host_functions {
     (
-        $fn_name:ident ( $($arg_name:ident : $arg_type:ty),* $(,)? ) $(-> $ret_type:ty)?
+        $(
+            $fn_name:ident ( $($arg_name:ident : $arg_type:ty),* $(,)? ) $(-> $ret_type:ty)?
+        );* $(;)?
     ) => {
+        $(
+            ::paste::paste! {
+                pub type [<$fn_name:camel Fn>] = unsafe extern "C" fn(
+                    exec_env: *mut wamrtime::wamr::WASMExecEnv,
+                    $($arg_name: $arg_type),*
+                ) $(-> $ret_type)?;
+
+                static mut [<$fn_name:snake:upper _IMPL>]: Option<[<$fn_name:camel Fn>]> = None;
+
+                extern "C" fn $fn_name(
+                    _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+                    $($arg_name: $arg_type),*
+                ) $(-> $ret_type)? {
+                    let impl_fn = unsafe {
+                        [<$fn_name:snake:upper _IMPL>].expect(concat!("AVM ", stringify!($fn_name), " not set"))
+                    };
+                    unsafe { impl_fn(_exec_env, $($arg_name),*) }
+                }
+            }
+        )*
+
         ::paste::paste! {
-            pub type [<$fn_name:camel Fn>] = unsafe extern "C" fn(
-                exec_env: *mut wamrtime::wamr::WASMExecEnv,
-                $($arg_name: $arg_type),*
-            ) $(-> $ret_type)?;
-
-            static mut [<$fn_name:snake:upper _IMPL>]: Option<[<$fn_name:camel Fn>]> = None;
-
-            extern "C" fn $fn_name(
-                _exec_env: *mut wamrtime::wamr::WASMExecEnv,
-                $($arg_name: $arg_type),*
-            ) $(-> $ret_type)? {
-                let impl_fn = unsafe {
-                    [<$fn_name:snake:upper _IMPL>].expect(concat!("AVM ", stringify!($fn_name), " not set"))
-                };
-                unsafe { impl_fn(_exec_env, $($arg_name),*) }
+            #[unsafe(no_mangle)]
+            pub extern "C" fn avm_init(
+                ctx: *mut ::std::ffi::c_void,
+                $([<$fn_name _impl>]: [<$fn_name:camel Fn>]),*
+            ) {
+                if !ctx.is_null() {
+                    panic!("AVM context already set");
+                }
+                unsafe {
+                    AVM_CTX = ctx;
+                    $(
+                        [<$fn_name:snake:upper _IMPL>] = Some([<$fn_name _impl>]);
+                    )*
+                }
             }
         }
     };
 }
 
-avm_host_function!(
-    avm_get_global_uint(app: u64, key_ptr: *const u8, key_len: u32) -> u64
-);
-
-avm_host_function!(
-    avm_set_global_uint(app: u64, key_ptr: *const u8, key_len: u32, value: u64)
-);
-
-#[unsafe(no_mangle)]
-pub extern "C" fn avm_init(
-    ctx: *mut c_void,
-    get_global_uint_impl: AvmGetGlobalUintFn,
-    set_global_uint_impl: AvmSetGlobalUintFn,
-) {
-    if !ctx.is_null() {
-        panic!("AVM context already set");
-    }
-    unsafe {
-        AVM_CTX = ctx;
-        AVM_GET_GLOBAL_UINT_IMPL = Some(get_global_uint_impl);
-        AVM_SET_GLOBAL_UINT_IMPL = Some(set_global_uint_impl);
-    }
+avm_host_functions! {
+    avm_get_global_uint(app: u64, key_ptr: *const u8, key_len: u32) -> u64;
+    avm_set_global_uint(app: u64, key_ptr: *const u8, key_len: u32, value: u64);
 }
 
 enum AvmType {
