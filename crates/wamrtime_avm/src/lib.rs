@@ -1,5 +1,7 @@
 use std::ffi::c_void;
+use std::ops::Deref;
 use std::path::PathBuf;
+use std::sync::{LazyLock, Mutex, OnceLock};
 use std::time::Instant;
 
 use wamrtime::compiler::Compiler;
@@ -123,6 +125,64 @@ pub extern "C" fn host_gas_check_impl(_exec_env: *mut c_void, requested_gas: i64
             panic!("Out of gas");
         }
     }
+}
+
+static RUNTIME: LazyLock<WamrRuntime> = LazyLock::new(|| {
+    WamrRuntime::new(
+        host_gas_check_impl,
+        AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
+    )
+});
+
+static EVALUATOR: OnceLock<Mutex<Evaluator>> = OnceLock::new();
+
+// TODO: Put this in avm_init?
+#[unsafe(no_mangle)]
+pub extern "C" fn avm_init_eval() {
+    if EVALUATOR.get().is_some() {
+        return;
+    }
+    let runtime = RUNTIME.deref();
+    let evaluator = Evaluator::new(runtime);
+    if EVALUATOR.set(Mutex::new(evaluator)).is_err() {
+        panic!("Evaluator already initialized");
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn test_avm_prep_round() {
+    let runtime = RUNTIME.deref();
+    let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm.wasm");
+    let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
+    let compiler = Compiler::new(runtime);
+    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
+
+    let aot_bytes_vec = vec![aot_bytes.clone()];
+
+    let mut evaluator = EVALUATOR
+        .get()
+        .expect("Evaluator not initialized")
+        .lock()
+        .unwrap();
+
+    evaluator
+        .next_round(aot_bytes_vec)
+        .expect("Initial round failed");
+
+    evaluator.wait_for_init().expect("Evaluator init failed");
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn test_avm_run_program() {
+    let evaluator = EVALUATOR
+        .get()
+        .expect("Evaluator not initialized")
+        .lock()
+        .unwrap();
+
+    evaluator
+        ._test_only_call_next(0)
+        .expect("Program call failed");
 }
 
 #[unsafe(no_mangle)]

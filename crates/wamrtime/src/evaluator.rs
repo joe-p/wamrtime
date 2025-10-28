@@ -103,18 +103,39 @@ impl<'runtime> Evaluator<'runtime> {
         let state_guard = self.state.lock().unwrap();
         for idx in 0..state_guard.program_lens[self.current_idx] {
             if let Some(program) = &state_guard.programs[self.current_idx][idx] {
-                let start = Instant::now();
-                let res = program.call();
-                let duration = start.elapsed();
-                println!(
-                    "Program {} executed in {} ns with return value {}",
-                    idx,
-                    duration.as_nanos(),
-                    res
-                );
+                // let start = Instant::now();
+                program.call();
+                // let duration = start.elapsed();
+                // println!(
+                //     "Program {} executed in {} ns with return value {}",
+                //     idx,
+                //     duration.as_nanos(),
+                //     res
+                // );
             }
         }
 
         Ok(())
+    }
+
+    pub fn wait_for_init(&mut self) -> Result<(), String> {
+        if let Some(thread) = self.init_thread.take() {
+            thread
+                .join()
+                .map_err(|_| "Thread join failed".to_string())??;
+        }
+        Ok(())
+    }
+
+    // TODO: Completely rework the evaluator so that it has a hashmap of aot hash -> Program
+    pub fn _test_only_call_next(&self, program_idx: usize) -> Result<u64, String> {
+        let state_guard = self.state.lock().unwrap();
+
+        if let Some(program) = &state_guard.programs[(self.current_idx + 1) % 3][program_idx] {
+            let res = program.call();
+            Ok(res)
+        } else {
+            Err(format!("Program at index {} not found", program_idx))
+        }
     }
 }

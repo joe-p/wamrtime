@@ -39,24 +39,12 @@ impl<'runtime> Compiler<'runtime> {
         let gas_metered_module_bytes =
             inject(&mut module, backend, &ConstantCostRules::new(1, 10_000, 1)).unwrap();
 
-        println!(
-            "Gas Metering: {} bytes -> {} bytes",
-            raw_wasm_bytes.len(),
-            gas_metered_module_bytes.len()
-        );
-
         let mut gas_metered_module = ModuleInfo::new(&gas_metered_module_bytes)
             .expect("Failed to create ModuleInfo from gas-metered bytes");
 
         let stack_limited_and_gas_metered_module_bytes =
             inject_stack_limiter(&mut gas_metered_module, 1000)
                 .expect("Failed to inject stack limiter");
-
-        println!(
-            "Stack Limited: {} bytes -> {} bytes",
-            gas_metered_module_bytes.len(),
-            stack_limited_and_gas_metered_module_bytes.len()
-        );
 
         let mut wasm_bytes = stack_limited_and_gas_metered_module_bytes;
 
@@ -79,7 +67,6 @@ impl<'runtime> Compiler<'runtime> {
             ..Default::default()
         };
 
-        println!("Loading WASM module for compilation...");
         let mut err_buf = [0i8; ERROR_BUFFER_SIZE];
         let module = unsafe_wamr_fns::wasm_runtime_load(
             wasm_bytes.as_mut_ptr(),
@@ -93,9 +80,6 @@ impl<'runtime> Compiler<'runtime> {
                 .into_owned();
             panic!("Failed to load WASM module for compilation: {}", err_msg);
         }
-
-        println!("WASM module loaded at: {:?}", module);
-        println!("Creating compilation data...");
 
         let comp_data =
             unsafe { wamr::aot_create_comp_data(module as *mut c_void, arch.as_ptr(), false) };
@@ -112,8 +96,6 @@ impl<'runtime> Compiler<'runtime> {
             unsafe_wamr_fns::wasm_runtime_unload(module);
             panic!("Failed to create compilation data: {}", err_msg);
         }
-
-        println!("Comp data created at: {:?}", comp_data);
 
         let comp_ctx = unsafe { wamr::aot_create_comp_context(comp_data, &mut compile_option) };
 
@@ -133,7 +115,6 @@ impl<'runtime> Compiler<'runtime> {
             panic!("Failed to create compilation context: {}", err_msg);
         }
 
-        println!("Compiling WASM to AOT...");
         let compile_result = unsafe { wamr::aot_compile_wasm(comp_ctx) };
 
         // TODO: PR to wamr-compiler to add a "silent" option to avoid stdout pollution
@@ -161,7 +142,6 @@ impl<'runtime> Compiler<'runtime> {
             panic!("Failed to compile WASM: {}", err_msg);
         }
 
-        println!("Creating AOT object data...");
         let obj_data = unsafe { wamr::aot_obj_data_create(comp_ctx) };
 
         if obj_data.is_null() {
@@ -182,7 +162,6 @@ impl<'runtime> Compiler<'runtime> {
         }
 
         let compiled_size = unsafe { wamr::aot_get_aot_file_size(comp_ctx, comp_data, obj_data) };
-        println!("Compiled AOT size: {} bytes", compiled_size);
 
         let mut aot_bytes = vec![0u8; compiled_size as usize];
 

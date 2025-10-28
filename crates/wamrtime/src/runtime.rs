@@ -13,6 +13,11 @@ pub struct WamrRuntime {
     _c_strings: Vec<std::ffi::CString>,
 }
 
+/// Safety: We are ensuring that we can use WamrRuntime in LazyLock
+/// Maybe in the future we use use once_cell::unsync::Lazy?
+unsafe impl Sync for WamrRuntime {}
+unsafe impl Send for WamrRuntime {}
+
 impl Drop for WamrRuntime {
     fn drop(&mut self) {
         unsafe_wamr_fns::wasm_runtime_destroy();
@@ -124,8 +129,6 @@ impl WamrRuntime {
             panic!("Failed to initialize WAMR runtime");
         }
 
-        println!("Registering native functions...");
-
         if !unsafe_wamr_fns::wasm_runtime_register_natives(
             c"env".as_ptr(),
             runtime.native_symbols.as_ptr() as *mut wamr::NativeSymbol,
@@ -134,7 +137,6 @@ impl WamrRuntime {
             panic!("Failed to register native symbols");
         }
 
-        println!("Native functions registered successfully.");
         runtime
     }
 }
