@@ -44,9 +44,10 @@ macro_rules! avm_host_functions {
                 $([<$fn_name _impl>]: [<$fn_name:camel Fn>]),*
             ) {
                 unsafe {
-                    if !AVM_CTX.is_null() {
-                        panic!("AVM context already set");
-                    }
+                    // TODO: Eventually add this back in
+                    // if !AVM_CTX.is_null() {
+                    //     panic!("AVM context already set");
+                    // }
                     AVM_CTX = ctx;
                     $(
                         [<$fn_name:snake:upper _IMPL>] = Some([<$fn_name _impl>]);
@@ -131,11 +132,7 @@ pub extern "C" fn test_run() {
         AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
     );
 
-    let mut wasm_path = PathBuf::from("../../zig-out/bin/avm.wasm");
-
-    if !wasm_path.exists() {
-        wasm_path = PathBuf::from("./zig-out/bin/avm.wasm");
-    }
+    let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm.wasm");
     let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
     let compiler = Compiler::new(&runtime);
     let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
