@@ -39,14 +39,7 @@ impl<'runtime> Compiler<'runtime> {
         let gas_metered_module_bytes =
             inject(&mut module, backend, &ConstantCostRules::new(1, 10_000, 1)).unwrap();
 
-        let mut gas_metered_module = ModuleInfo::new(&gas_metered_module_bytes)
-            .expect("Failed to create ModuleInfo from gas-metered bytes");
-
-        let stack_limited_and_gas_metered_module_bytes =
-            inject_stack_limiter(&mut gas_metered_module, 1000)
-                .expect("Failed to inject stack limiter");
-
-        let mut wasm_bytes = stack_limited_and_gas_metered_module_bytes;
+        let mut wasm_bytes = gas_metered_module_bytes;
 
         let arch = c"aarch64";
 

@@ -55,6 +55,8 @@ set (WAMR_BUILD_LIBC_WASI 0)
 set (WAMR_DISABLE_STACK_HW_BOUND_CHECK 0)
 set (WAMR_DISABLE_HW_BOUND_CHECK 0)
 
+# TODO: determine best stack limit/guard size
+
 if (NOT MSVC)
   # linker flags
   if (NOT (CMAKE_C_COMPILER MATCHES ".*clang.*" OR CMAKE_C_COMPILER_ID MATCHES ".*Clang"))
