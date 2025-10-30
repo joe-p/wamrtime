@@ -166,10 +166,12 @@ pub extern "C" fn test_avm_prep_round() {
         .unwrap();
 
     evaluator
-        .next_round(aot_bytes_vec)
+        .next_round(aot_bytes_vec.clone())
         .expect("Initial round failed");
 
-    evaluator.wait_for_init().expect("Evaluator init failed");
+    evaluator
+        .next_round(aot_bytes_vec.clone())
+        .expect("next round failed");
 }
 
 #[unsafe(no_mangle)]
@@ -180,9 +182,7 @@ pub extern "C" fn test_avm_run_program() {
         .lock()
         .unwrap();
 
-    evaluator
-        ._test_only_call_next(0)
-        .expect("Program call failed");
+    evaluator.call_program(0).expect("Program call failed");
 }
 
 #[unsafe(no_mangle)]
@@ -199,26 +199,23 @@ pub extern "C" fn test_run() {
 
     let mut evaluator = Evaluator::new(&runtime);
 
-    let aot_bytes_vec = vec![aot_bytes.clone()];
+    let aot_bytes_vec = vec![aot_bytes.clone(); 10];
 
     evaluator
         .next_round(aot_bytes_vec.clone())
         .expect("Initial round failed");
 
-    for i in 0..11 {
-        println!("\nIteration {}:", i + 1);
-        evaluator
-            .next_round(aot_bytes_vec.clone())
-            .expect("Round failed");
-    }
-
-    println!("\nFinal Iteration:");
-    let start = Instant::now();
     evaluator
-        .next_round(aot_bytes_vec)
-        .expect("Final round failed");
-    let duration = start.elapsed();
-    println!("Final iteration executed in {} ns", duration.as_nanos());
+        .next_round(aot_bytes_vec.clone())
+        .expect("Second round failed");
+
+    for i in 0..aot_bytes_vec.len() {
+        println!("\nIteration {}:", i + 1);
+        let start = Instant::now();
+        evaluator.call_program(i).expect("Program call failed");
+        let duration = start.elapsed();
+        println!("Iteration {} executed in {} ns", i + 1, duration.as_nanos());
+    }
 
     println!("All iterations completed successfully.");
 }

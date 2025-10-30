@@ -59,26 +59,22 @@ mod tests {
 
         let mut evaluator = Evaluator::new(&runtime);
 
-        let aot_bytes_vec = vec![
-            aot_bytes.clone(),
-            aot_bytes.clone(),
-            aot_bytes.clone(),
-            aot_bytes.clone(),
-        ];
+        let aot_bytes_vec = vec![aot_bytes.clone(); 10];
 
-        for i in 0..3 {
-            println!("\nIteration {}:", i + 1);
-            evaluator
-                .next_round(aot_bytes_vec.clone())
-                .expect("Round failed");
-        }
-
-        let start = std::time::Instant::now();
         evaluator
-            .next_round(aot_bytes_vec)
-            .expect("Final round failed");
-        let duration = start.elapsed();
-        println!("Final iteration executed in {} ns", duration.as_nanos());
+            .next_round(aot_bytes_vec.clone())
+            .expect("Initial round failed");
+        evaluator
+            .next_round(aot_bytes_vec.clone())
+            .expect("Second round failed");
+
+        for i in 0..aot_bytes_vec.len() {
+            println!("\nIteration {}:", i + 1);
+            let start = std::time::Instant::now();
+            evaluator.call_program(i).expect("Program call failed");
+            let duration = start.elapsed();
+            println!("Iteration {} completed in: {:?}", i + 1, duration);
+        }
 
         println!("All iterations completed successfully.");
     }

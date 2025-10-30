@@ -6,7 +6,6 @@ use crate::{ERROR_BUFFER_SIZE, wamr};
 
 use radix_wasm_instrument::{
     gas_metering::{ConstantCostRules, host_function, inject},
-    inject_stack_limiter,
     utils::module_info::ModuleInfo,
 };
 
