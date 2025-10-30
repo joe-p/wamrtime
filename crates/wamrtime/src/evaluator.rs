@@ -3,7 +3,6 @@ use crate::program::Program;
 use crate::runtime::WamrRuntime;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Instant;
 
 const MAX_PROGRAMS: usize = 256;
 
