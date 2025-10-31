@@ -49,7 +49,7 @@ impl<'runtime> Evaluator<'runtime> {
     fn init_next(
         state: Arc<Mutex<SharedEvaluatorState>>,
         current_idx: usize,
-        aot_bytes_vec: Vec<Vec<u8>>,
+        mut aot_bytes_vec: Vec<Vec<u8>>,
     ) -> Result<(), String> {
         let prev_idx = (current_idx + 2) % 3;
         let next_idx = (current_idx + 1) % 3;
@@ -62,17 +62,21 @@ impl<'runtime> Evaluator<'runtime> {
         }
 
         let len = aot_bytes_vec.len();
-        let mut new_programs = Vec::new();
-        for mut aot_bytes in aot_bytes_vec {
+
+        const INIT: Option<Program> = None;
+        let mut new_programs: [Option<Program>; MAX_PROGRAMS] = [INIT; MAX_PROGRAMS];
+
+        for (i, aot_bytes) in aot_bytes_vec.iter_mut().enumerate() {
             let mut err_buf = [0i8; ERROR_BUFFER_SIZE];
-            let program = Program::new(&mut aot_bytes, &mut err_buf, APP_HEAP_SIZE);
-            new_programs.push(program);
+            let program = Program::new(aot_bytes, &mut err_buf, APP_HEAP_SIZE);
+
+            new_programs[i] = Some(program);
         }
 
         {
             let mut state_guard = state.lock().unwrap();
             for (idx, program) in new_programs.into_iter().enumerate() {
-                state_guard.programs[next_idx][idx] = Some(program);
+                state_guard.programs[next_idx][idx] = program;
             }
             state_guard.program_lens[next_idx] = len;
         }
