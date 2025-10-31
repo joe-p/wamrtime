@@ -173,6 +173,8 @@ pub extern "C" fn test_avm_prep_round() {
     evaluator
         .next_round(aot_bytes_vec.clone())
         .expect("next round failed");
+
+    evaluator.wait_for_init().expect("Wait for init failed");
 }
 
 #[unsafe(no_mangle)]
