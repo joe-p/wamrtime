@@ -6,10 +6,11 @@ use std::thread;
 
 const MAX_PROGRAMS: usize = 256;
 
-type ProgramArray = Vec<Program>;
+type ProgramArray = [Option<Program>; MAX_PROGRAMS];
 
 struct SharedEvaluatorState {
     programs: [ProgramArray; 3],
+    program_lens: [usize; 3],
 }
 
 pub struct Evaluator<'runtime> {
@@ -29,13 +30,15 @@ impl Drop for Evaluator<'_> {
 
 impl<'runtime> Evaluator<'runtime> {
     pub fn new(runtime: &'runtime WamrRuntime) -> Self {
+        const INIT: Option<Program> = None;
         Evaluator {
             state: Arc::new(Mutex::new(SharedEvaluatorState {
                 programs: [
-                    Vec::with_capacity(MAX_PROGRAMS),
-                    Vec::with_capacity(MAX_PROGRAMS),
-                    Vec::with_capacity(MAX_PROGRAMS),
+                    [INIT; MAX_PROGRAMS],
+                    [INIT; MAX_PROGRAMS],
+                    [INIT; MAX_PROGRAMS],
                 ],
+                program_lens: [0, 0, 0],
             })),
             current_idx: 0,
             init_thread: None,
@@ -53,20 +56,25 @@ impl<'runtime> Evaluator<'runtime> {
 
         {
             let mut state_guard = state.lock().unwrap();
-            state_guard.programs[prev_idx].clear();
+            for idx in 0..state_guard.program_lens[prev_idx] {
+                state_guard.programs[prev_idx][idx] = None;
+            }
         }
 
-        let mut new_programs = Vec::with_capacity(aot_bytes_vec.len());
+        let len = aot_bytes_vec.len();
+        let mut new_programs = Vec::new();
         for mut aot_bytes in aot_bytes_vec {
-            let mut err_buf = Vec::with_capacity(ERROR_BUFFER_SIZE);
+            let mut err_buf = [0i8; ERROR_BUFFER_SIZE];
             let program = Program::new(&mut aot_bytes, &mut err_buf, APP_HEAP_SIZE);
             new_programs.push(program);
         }
 
         {
             let mut state_guard = state.lock().unwrap();
-            state_guard.programs[next_idx].clear();
-            state_guard.programs[next_idx].extend(new_programs);
+            for (idx, program) in new_programs.into_iter().enumerate() {
+                state_guard.programs[next_idx][idx] = Some(program);
+            }
+            state_guard.program_lens[next_idx] = len;
         }
 
         Ok(())
@@ -105,7 +113,7 @@ impl<'runtime> Evaluator<'runtime> {
     pub fn call_program(&self, program_idx: usize) -> Result<u64, String> {
         let state_guard = self.state.lock().unwrap();
 
-        if let Some(program) = &state_guard.programs[self.current_idx].get(program_idx) {
+        if let Some(program) = &state_guard.programs[self.current_idx][program_idx] {
             let res = program.call();
             Ok(res)
         } else {
