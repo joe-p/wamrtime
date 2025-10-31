@@ -1,4 +1,4 @@
-use crate::HEAP_SIZE;
+use crate::RUNTIME_HEAP_SIZE;
 use crate::unsafe_wamr_fns;
 use crate::wamr;
 use std::ffi::c_void;
@@ -109,7 +109,7 @@ impl WamrRuntime {
 
         let runtime = WamrRuntime {
             native_symbols,
-            heap: vec![0; HEAP_SIZE],
+            heap: Vec::with_capacity(RUNTIME_HEAP_SIZE),
             _c_strings: c_strings,
         };
 
@@ -119,7 +119,7 @@ impl WamrRuntime {
             mem_alloc_option: wamr::MemAllocOption {
                 pool: wamr::MemAllocOption__bindgen_ty_1 {
                     heap_buf: runtime.heap.as_ptr() as *mut c_void,
-                    heap_size: HEAP_SIZE as u32,
+                    heap_size: RUNTIME_HEAP_SIZE as u32,
                 },
             },
             ..Default::default()

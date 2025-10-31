@@ -154,8 +154,9 @@ pub extern "C" fn test_avm_prep_round() {
     let runtime = RUNTIME.deref();
     let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm.wasm");
     let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
+    let mut err_buf = Vec::with_capacity(wamrtime::ERROR_BUFFER_SIZE);
     let compiler = Compiler::new(runtime);
-    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
+    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf);
 
     let aot_bytes_vec = vec![aot_bytes.clone()];
 
@@ -194,8 +195,9 @@ pub extern "C" fn test_run() {
 
     let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm.wasm");
     let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
+    let mut err_buf = Vec::with_capacity(wamrtime::ERROR_BUFFER_SIZE);
     let compiler = Compiler::new(&runtime);
-    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
+    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf);
 
     let mut evaluator = Evaluator::new(&runtime);
 

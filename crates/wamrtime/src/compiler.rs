@@ -29,7 +29,7 @@ impl<'runtime> Compiler<'runtime> {
         Compiler { _runtime: runtime }
     }
 
-    pub fn compile_wasm(&self, raw_wasm_bytes: &mut [u8]) -> Vec<u8> {
+    pub fn compile_wasm(&self, raw_wasm_bytes: &mut [u8], err_buf: &mut [i8]) -> Vec<u8> {
         let backend = host_function::Injector::new("env", "host_gas_check");
 
         let mut module =
@@ -59,7 +59,6 @@ impl<'runtime> Compiler<'runtime> {
             ..Default::default()
         };
 
-        let mut err_buf = [0i8; ERROR_BUFFER_SIZE];
         let module = unsafe_wamr_fns::wasm_runtime_load(
             wasm_bytes.as_mut_ptr(),
             wasm_bytes.len().try_into().expect("should fit"),

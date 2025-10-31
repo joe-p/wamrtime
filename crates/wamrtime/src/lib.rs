@@ -9,14 +9,18 @@ pub mod program;
 pub mod runtime;
 mod unsafe_wamr_fns;
 
-const ERROR_BUFFER_SIZE: usize = 128;
+pub const ERROR_BUFFER_SIZE: usize = 128;
 
-const HEAP_SIZE: usize = 1024 * 1024 * 2;
+const APP_HEAP_SIZE: usize = 4096 * 256;
+const MAX_APPS: usize = 256;
+const RUNTIME_HEAP_SIZE: usize = APP_HEAP_SIZE * MAX_APPS;
 const STACK_SIZE: usize = 1024 * 128;
 
 #[cfg(test)]
 mod tests {
     use std::ffi::c_void;
+
+    use crate::ERROR_BUFFER_SIZE;
 
     use super::compiler::Compiler;
     use super::evaluator::Evaluator;
@@ -54,8 +58,15 @@ mod tests {
 
         let mut wasm_bytes =
             std::fs::read("../../zig-out/bin/program.wasm").expect("Failed to read WASM file");
+        let mut err_buf = Vec::with_capacity(ERROR_BUFFER_SIZE);
         let compiler = Compiler::new(&runtime);
-        let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
+        println!("Compiling WASM to AOT...: {}", wasm_bytes.len());
+        let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf);
+
+        println!("AOT bytes length: {}", aot_bytes.len());
+        println!("Error buffer (if any): {}", unsafe {
+            std::ffi::CStr::from_ptr(err_buf.as_ptr()).to_string_lossy()
+        });
 
         let mut evaluator = Evaluator::new(&runtime);
 

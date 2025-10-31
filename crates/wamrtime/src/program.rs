@@ -1,6 +1,6 @@
 use crate::unsafe_wamr_fns;
 use crate::wamr;
-use crate::{ERROR_BUFFER_SIZE, HEAP_SIZE, STACK_SIZE};
+use crate::{ERROR_BUFFER_SIZE, STACK_SIZE};
 pub struct Program {
     module: *mut wamr::WASMModuleCommon,
     instance: *mut wamr::WASMModuleInstanceCommon,
@@ -20,7 +20,7 @@ impl Drop for Program {
 }
 
 impl Program {
-    pub fn new(aot_bytes: &mut [u8], err_buf: &mut [i8]) -> Self {
+    pub fn new(aot_bytes: &mut [u8], err_buf: &mut [i8], app_heap_size: usize) -> Self {
         let module = unsafe_wamr_fns::wasm_runtime_load(
             aot_bytes.as_mut_ptr(),
             aot_bytes.len().try_into().expect("should fit"),
@@ -29,13 +29,18 @@ impl Program {
         );
 
         if module.is_null() {
-            panic!("Failed to load WASM module");
+            panic!(
+                "Failed to load WASM module: {}",
+                unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
+                    .to_string_lossy()
+                    .into_owned()
+            );
         }
 
         let instance = unsafe_wamr_fns::wasm_runtime_instantiate(
             module,
             STACK_SIZE as u32,
-            HEAP_SIZE as u32,
+            app_heap_size as u32,
             err_buf.as_mut_ptr(),
             ERROR_BUFFER_SIZE as u32,
         );
