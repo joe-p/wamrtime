@@ -68,18 +68,26 @@ macro_rules! avm_host_functions {
 avm_host_functions! {
     avm_get_global_uint(app: u64, key_ptr: *const u8, key_len: u32) -> u64;
     avm_set_global_uint(app: u64, key_ptr: *const u8, key_len: u32, value: u64);
+    avm_get_global_bytes(app: u64, key_ptr: *const u8, key_len: u32, dest_ptr: *mut u8, dest_len: u32) -> i32;
+    avm_set_global_bytes(app: u64, key_ptr: *const u8, key_len: u32, src_ptr: *const u8, src_len: u32);
 }
 
 enum AvmType {
     U64,
-    Bytes,
+    App,
+    ByteSlice,
+    BytesLen,
+    MutByteSlice,
 }
 
 impl From<&AvmType> for wamrtime::runtime::WamrType {
     fn from(avm_type: &AvmType) -> Self {
         match avm_type {
             AvmType::U64 => wamrtime::runtime::WamrType::I64,
-            AvmType::Bytes => wamrtime::runtime::WamrType::ByteSlice,
+            AvmType::App => wamrtime::runtime::WamrType::I64,
+            AvmType::BytesLen => wamrtime::runtime::WamrType::I32,
+            AvmType::ByteSlice => wamrtime::runtime::WamrType::ByteSlice,
+            AvmType::MutByteSlice => wamrtime::runtime::WamrType::MutByteSlice,
         }
     }
 }
@@ -107,15 +115,27 @@ impl From<&AvmFunction> for wamrtime::runtime::WamrHostFunction {
 const AVM_FUNCTIONS: &[AvmFunction] = &[
     AvmFunction {
         name: "avm_get_global_uint",
-        args: &[AvmType::U64, AvmType::Bytes],
+        args: &[AvmType::App, AvmType::ByteSlice],
         returns: Some(AvmType::U64),
         host_func: avm_get_global_uint as *mut c_void,
     },
     AvmFunction {
         name: "avm_set_global_uint",
-        args: &[AvmType::U64, AvmType::Bytes, AvmType::U64],
+        args: &[AvmType::App, AvmType::ByteSlice, AvmType::U64],
         returns: None,
         host_func: avm_set_global_uint as *mut c_void,
+    },
+    AvmFunction {
+        name: "avm_get_global_bytes",
+        args: &[AvmType::App, AvmType::ByteSlice, AvmType::MutByteSlice],
+        returns: Some(AvmType::BytesLen),
+        host_func: avm_get_global_bytes as *mut c_void,
+    },
+    AvmFunction {
+        name: "avm_set_global_bytes",
+        args: &[AvmType::App, AvmType::ByteSlice, AvmType::ByteSlice],
+        returns: None,
+        host_func: avm_set_global_bytes as *mut c_void,
     },
 ];
 
@@ -239,7 +259,10 @@ mod tests {
         println!("Hello from Rust!");
     }
 
-    static GLOBAL_STATE: LazyLock<Mutex<HashMap<Vec<u8>, u64>>> =
+    static GLOBAL_STATE_UINTS: LazyLock<Mutex<HashMap<Vec<u8>, u64>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    static GLOBAL_STATE_BYTES: LazyLock<Mutex<HashMap<Vec<u8>, Vec<u8>>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
 
     #[unsafe(no_mangle)]
@@ -251,7 +274,7 @@ mod tests {
         key_len: u32,
     ) -> u64 {
         let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
-        let state = GLOBAL_STATE.lock().unwrap();
+        let state = GLOBAL_STATE_UINTS.lock().unwrap();
         *state.get(&key).unwrap_or(&0)
     }
 
@@ -265,13 +288,90 @@ mod tests {
         value: u64,
     ) {
         let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
-        let mut state = GLOBAL_STATE.lock().unwrap();
+        let mut state = GLOBAL_STATE_UINTS.lock().unwrap();
+        state.insert(key, value);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rust_impl_get_global_bytes(
+        _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+        _ctx: *mut c_void,
+        _app: u64,
+        key_ptr: *const u8,
+        key_len: u32,
+        dest_ptr: *mut u8,
+        dest_len: u32,
+    ) -> i32 {
+        let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
+        let state = GLOBAL_STATE_BYTES.lock().unwrap();
+        if let Some(value) = state.get(&key) {
+            if dest_len < value.len() as u32 {
+                return -1;
+            }
+            unsafe {
+                std::ptr::copy_nonoverlapping(value.as_ptr(), dest_ptr, value.len());
+            }
+            value.len() as i32
+        } else {
+            0
+        }
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rust_impl_set_global_bytes(
+        _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+        _ctx: *mut c_void,
+        _app: u64,
+        key_ptr: *const u8,
+        key_len: u32,
+        src_ptr: *const u8,
+        src_len: u32,
+    ) {
+        let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
+        let value = unsafe { std::slice::from_raw_parts(src_ptr, src_len as usize) }.to_vec();
+        let mut state = GLOBAL_STATE_BYTES.lock().unwrap();
         state.insert(key, value);
     }
 
     #[test]
     fn test_avm() {
-        avm_init(rust_impl_get_global_uint, rust_impl_set_global_uint);
-        test_run();
+        avm_init(
+            rust_impl_get_global_uint,
+            rust_impl_set_global_uint,
+            rust_impl_get_global_bytes,
+            rust_impl_set_global_bytes,
+        );
+        let runtime = WamrRuntime::new(
+            host_gas_check_impl,
+            AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
+        );
+
+        let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm_complex.wasm");
+        let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
+        let mut err_buf = Vec::with_capacity(wamrtime::ERROR_BUFFER_SIZE);
+        let compiler = Compiler::new(&runtime);
+        let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf);
+
+        let mut evaluator = Evaluator::new(&runtime);
+
+        let aot_bytes_vec = vec![aot_bytes.clone(); 10];
+
+        evaluator
+            .next_round(aot_bytes_vec.clone())
+            .expect("Initial round failed");
+
+        evaluator
+            .next_round(aot_bytes_vec.clone())
+            .expect("Second round failed");
+
+        for i in 0..aot_bytes_vec.len() {
+            println!("\nIteration {}:", i + 1);
+            let start = Instant::now();
+            evaluator.call_program(i).expect("Program call failed");
+            let duration = start.elapsed();
+            println!("Iteration {} executed in {} ns", i + 1, duration.as_nanos());
+        }
+
+        println!("All iterations completed successfully.");
     }
 }

@@ -28,4 +28,5 @@ fn build_wasm(b: *std.Build, comptime name: []const u8) void {
 pub fn build(b: *std.Build) void {
     build_wasm(b, "program");
     build_wasm(b, "avm");
+    build_wasm(b, "avm_complex");
 }

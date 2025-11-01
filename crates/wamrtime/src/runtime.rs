@@ -30,6 +30,7 @@ pub enum WamrType {
     I64,
     I32,
     ByteSlice,
+    MutByteSlice,
 }
 
 impl Display for WamrType {
@@ -38,6 +39,7 @@ impl Display for WamrType {
             WamrType::I64 => write!(f, "I"),
             WamrType::I32 => write!(f, "i"),
             WamrType::ByteSlice => write!(f, "*~"),
+            WamrType::MutByteSlice => write!(f, "*~"),
         }
     }
 }
