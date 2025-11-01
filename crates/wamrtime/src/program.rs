@@ -39,7 +39,7 @@ impl Program {
 
         let instance = unsafe_wamr_fns::wasm_runtime_instantiate(
             module,
-            STACK_SIZE as u32,
+            STACK_SIZE,
             app_heap_size as u32,
             err_buf.as_mut_ptr(),
             ERROR_BUFFER_SIZE as u32,
@@ -50,7 +50,7 @@ impl Program {
             panic!("Failed to instantiate WASM module");
         }
 
-        let exec_env = unsafe_wamr_fns::wasm_runtime_create_exec_env(instance, 8192);
+        let exec_env = unsafe_wamr_fns::wasm_runtime_create_exec_env(instance, STACK_SIZE);
         if exec_env.is_null() {
             unsafe_wamr_fns::wasm_runtime_deinstantiate(instance);
             unsafe_wamr_fns::wasm_runtime_unload(module);

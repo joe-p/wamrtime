@@ -11,10 +11,24 @@ mod unsafe_wamr_fns;
 
 pub const ERROR_BUFFER_SIZE: usize = 128;
 
-const APP_HEAP_SIZE: usize = 4096 * 256;
-const MAX_APPS: usize = 256;
-const RUNTIME_HEAP_SIZE: usize = APP_HEAP_SIZE * MAX_APPS;
-const STACK_SIZE: usize = 1024 * 128;
+const KB: usize = 1024;
+
+/// The size of the heap that each WAMR program gets
+const APP_HEAP_SIZE: usize = 32 * KB;
+
+/// The maximum number of WAMR programs that can be called per outer call
+const MAX_WAMR_PROGRAM_REFERENCES: usize = 256;
+
+/// The maximum number of outer calls in a group
+const MAX_OUTER_CALLS: usize = 16;
+
+/// The total runtime heap size needed to support all WAMR possible programs
+const RUNTIME_HEAP_SIZE: usize = APP_HEAP_SIZE * (MAX_WAMR_PROGRAM_REFERENCES + MAX_OUTER_CALLS);
+
+/// Since everything is AoT, we don't use the WASM stack
+/// See https://bytecodealliance.github.io/wamr.dev/blog/understand-the-wamr-stacks/
+/// NOTE: PR to support this upstream is here: https://github.com/bytecodealliance/wasm-micro-runtime/pull/4688
+const STACK_SIZE: u32 = 0;
 
 #[cfg(test)]
 mod tests {
