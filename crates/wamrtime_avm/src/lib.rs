@@ -42,18 +42,23 @@ macro_rules! avm_host_functions {
         ::paste::paste! {
             #[unsafe(no_mangle)]
             pub extern "C" fn avm_init(
-                ctx: *mut ::std::ffi::c_void,
                 $([<$fn_name _impl>]: [<$fn_name:camel Fn>]),*
             ) {
                 unsafe {
-                    // TODO: Eventually add this back in
-                    // if !AVM_CTX.is_null() {
-                    //     panic!("AVM context already set");
-                    // }
-                    AVM_CTX = ctx;
+                    // TODO: Eventually should actually only get called once when creating the
+                    // block evaluator
+                    if EVALUATOR.get().is_some() {
+                        return;
+                    }
+
                     $(
                         [<$fn_name:snake:upper _IMPL>] = Some([<$fn_name _impl>]);
                     )*
+                    let runtime = RUNTIME.deref();
+                    let evaluator = Evaluator::new(runtime);
+                    if EVALUATOR.set(Mutex::new(evaluator)).is_err() {
+                        panic!("Evaluator already initialized");
+                    }
                 }
             }
         }
@@ -136,18 +141,14 @@ static RUNTIME: LazyLock<WamrRuntime> = LazyLock::new(|| {
 
 static EVALUATOR: OnceLock<Mutex<Evaluator>> = OnceLock::new();
 
-// TODO: Put this in avm_init?
 #[unsafe(no_mangle)]
-pub extern "C" fn avm_init_eval() {
-    if EVALUATOR.get().is_some() {
-        return;
-    }
-    let runtime = RUNTIME.deref();
-    let evaluator = Evaluator::new(runtime);
-    if EVALUATOR.set(Mutex::new(evaluator)).is_err() {
-        panic!("Evaluator already initialized");
+pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
+    unsafe {
+        AVM_CTX = ctx;
     }
 }
+
+// Functions exposed for testing purposes
 
 #[unsafe(no_mangle)]
 pub extern "C" fn test_avm_prep_round() {
@@ -270,11 +271,7 @@ mod tests {
 
     #[test]
     fn test_avm() {
-        avm_init(
-            std::ptr::null_mut(),
-            rust_impl_get_global_uint,
-            rust_impl_set_global_uint,
-        );
+        avm_init(rust_impl_get_global_uint, rust_impl_set_global_uint);
         test_run();
     }
 }
