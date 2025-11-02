@@ -32,5 +32,5 @@ done
 
 cargo build --workspace --exclude avm_complex --exclude avm_blank_key
 
-cargo run -p wamrtime-avm-bindgen -- /Users/joe/git/joe-p/wamrtime/crates/wamrtime_avm/src/lib.rs /Users/joe/git/algorand/go-algorand/data/transactions/logic/eval.go
+cargo run -p wamrtime-avm-bindgen -- /Users/joe/git/algorand/go-algorand/wamrtime/crates/wamrtime_avm/src/lib.rs /Users/joe/git/algorand/go-algorand/data/transactions/logic/eval.go
  

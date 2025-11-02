@@ -20,32 +20,32 @@ fn wasm_panic() {
 unsafe extern "C" {
     fn avm_get_global_uint(app: u64, key_ptr: *const u8, key_len: u32) -> u64;
     fn avm_set_global_uint(app: u64, key_ptr: *const u8, key_len: u32, value: u64);
-
+    fn amv_get_global_var_uint(field_index: u64) -> u64;
 }
 
-const APP_ID: u64 = 42;
 const KEY: &[u8] = b"foo";
 
 // export exactly "program" without keeping the Rust name table
 #[unsafe(export_name = "program")]
 pub extern "C" fn program() -> u64 {
+    let app_id = unsafe { amv_get_global_var_uint(8) };
     let key_ptr = KEY.as_ptr();
     let key_len = KEY.len() as u32;
 
     // uint should start at 0
-    let mut value = unsafe { avm_get_global_uint(APP_ID, key_ptr, key_len) };
+    let mut value = unsafe { avm_get_global_uint(app_id, key_ptr, key_len) };
     if value != 0 {
         wasm_panic();
     }
 
-    unsafe { avm_set_global_uint(APP_ID, key_ptr, key_len, 7) };
+    unsafe { avm_set_global_uint(app_id, key_ptr, key_len, 7) };
 
-    value = unsafe { avm_get_global_uint(APP_ID, key_ptr, key_len) };
+    value = unsafe { avm_get_global_uint(app_id, key_ptr, key_len) };
     if value != 7 {
         wasm_panic();
     }
 
-    unsafe { avm_set_global_uint(APP_ID, key_ptr, key_len, 0) };
+    unsafe { avm_set_global_uint(app_id, key_ptr, key_len, 0) };
 
     0
 }
