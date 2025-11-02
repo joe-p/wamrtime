@@ -1,6 +1,6 @@
-use crate::RUNTIME_HEAP_SIZE;
 use crate::unsafe_wamr_fns;
-use crate::wamr;
+use crate::{RUNTIME_HEAP_SIZE, Result, wamr};
+use color_eyre::eyre::{Context, eyre};
 use std::ffi::c_void;
 use std::fmt::Display;
 
@@ -83,24 +83,38 @@ impl WamrHostFunction {
 }
 
 impl WamrRuntime {
-    pub fn new(host_gas_check_fn: HostGasCheckFn, host_functions: Vec<WamrHostFunction>) -> Self {
+    pub fn new(
+        host_gas_check_fn: HostGasCheckFn,
+        host_functions: Vec<WamrHostFunction>,
+    ) -> Result<Self> {
         let mut c_strings: Vec<std::ffi::CString> = vec![];
-        let mut native_symbols: Vec<wamr::NativeSymbol> = host_functions
-            .iter()
-            .map(|host_fn| {
-                c_strings.push(std::ffi::CString::new(host_fn.name.clone()).unwrap());
-                c_strings.push(std::ffi::CString::new(host_fn.signature()).unwrap());
-                let symbol = c_strings[c_strings.len() - 2].as_ptr();
-                let signature = c_strings[c_strings.len() - 1].as_ptr();
+        let mut native_symbols: Vec<wamr::NativeSymbol> =
+            Vec::with_capacity(host_functions.len() + 1);
 
-                wamr::NativeSymbol {
-                    symbol,
-                    func_ptr: host_fn.function,
-                    signature,
-                    ..Default::default()
-                }
-            })
-            .collect();
+        for host_fn in &host_functions {
+            let name = std::ffi::CString::new(host_fn.name.clone()).wrap_err_with(|| {
+                format!("Host function name contains null byte: {}", host_fn.name)
+            })?;
+            let signature = std::ffi::CString::new(host_fn.signature()).wrap_err_with(|| {
+                format!(
+                    "Host function signature contains null byte: {}",
+                    host_fn.name
+                )
+            })?;
+
+            c_strings.push(name);
+            c_strings.push(signature);
+
+            let symbol = c_strings[c_strings.len() - 2].as_ptr();
+            let signature_ptr = c_strings[c_strings.len() - 1].as_ptr();
+
+            native_symbols.push(wamr::NativeSymbol {
+                symbol,
+                func_ptr: host_fn.function,
+                signature: signature_ptr,
+                ..Default::default()
+            });
+        }
 
         native_symbols.push(wamr::NativeSymbol {
             symbol: c"host_gas_check".as_ptr(),
@@ -128,7 +142,7 @@ impl WamrRuntime {
         };
 
         if !unsafe_wamr_fns::wasm_runtime_full_init(&mut init_args as *mut wamr::RuntimeInitArgs) {
-            panic!("Failed to initialize WAMR runtime");
+            return Err(eyre!("Failed to initialize WAMR runtime"));
         }
 
         if !unsafe_wamr_fns::wasm_runtime_register_natives(
@@ -136,9 +150,9 @@ impl WamrRuntime {
             runtime.native_symbols.as_ptr() as *mut wamr::NativeSymbol,
             runtime.native_symbols.len() as u32,
         ) {
-            panic!("Failed to register native symbols");
+            return Err(eyre!("Failed to register native symbols"));
         }
 
-        runtime
+        Ok(runtime)
     }
 }

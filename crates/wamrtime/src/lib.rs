@@ -9,6 +9,8 @@ pub mod program;
 pub mod runtime;
 mod unsafe_wamr_fns;
 
+pub type Result<T> = color_eyre::Result<T>;
+
 pub const ERROR_BUFFER_SIZE: usize = 128;
 
 const KB: usize = 1024;
@@ -34,21 +36,26 @@ const STACK_SIZE: u32 = 0;
 mod tests {
     use std::ffi::c_void;
 
-    use crate::ERROR_BUFFER_SIZE;
+    use crate::{ERROR_BUFFER_SIZE, Result, wamr};
 
     use super::compiler::Compiler;
     use super::evaluator::Evaluator;
     use super::runtime::{WamrHostFunction, WamrRuntime};
+    use color_eyre::eyre::Context;
 
     const GAS_LIMIT: i64 = 1_000_000;
     static mut GAS_USED: i64 = 0;
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn host_gas_check_impl(_exec_env: *mut c_void, requested_gas: i64) {
+    pub extern "C" fn host_gas_check_impl(exec_env: *mut c_void, requested_gas: i64) {
         unsafe {
             GAS_USED += requested_gas;
             if GAS_USED > GAS_LIMIT {
-                panic!("Out of gas");
+                let exec_env = exec_env as *mut wamr::WASMExecEnv;
+                let module_inst = wamr::wasm_runtime_get_module_inst(exec_env);
+                if !module_inst.is_null() {
+                    wamr::wasm_runtime_set_exception(module_inst, c"Out of gas".as_ptr());
+                }
             }
         }
     }
@@ -59,7 +66,11 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluator() {
+    fn test_evaluator() -> Result<()> {
+        unsafe {
+            GAS_USED = 0;
+        }
+
         let runtime = WamrRuntime::new(
             host_gas_check_impl,
             vec![WamrHostFunction::new(
@@ -68,14 +79,14 @@ mod tests {
                 None,
                 None,
             )],
-        );
+        )?;
 
-        let mut wasm_bytes =
-            std::fs::read("../../zig-out/bin/program.wasm").expect("Failed to read WASM file");
-        let mut err_buf = Vec::with_capacity(ERROR_BUFFER_SIZE);
+        let mut wasm_bytes = std::fs::read("../../zig-out/bin/program.wasm")
+            .with_context(|| "Failed to read WASM file".to_string())?;
+        let mut err_buf = vec![0i8; ERROR_BUFFER_SIZE];
         let compiler = Compiler::new(&runtime);
         println!("Compiling WASM to AOT...: {}", wasm_bytes.len());
-        let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf);
+        let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf)?;
 
         println!("AOT bytes length: {}", aot_bytes.len());
         println!("Error buffer (if any): {}", unsafe {
@@ -86,21 +97,18 @@ mod tests {
 
         let aot_bytes_vec = vec![aot_bytes.clone(); 10];
 
-        evaluator
-            .next_round(aot_bytes_vec.clone())
-            .expect("Initial round failed");
-        evaluator
-            .next_round(aot_bytes_vec.clone())
-            .expect("Second round failed");
+        evaluator.next_round(aot_bytes_vec.clone())?;
+        evaluator.next_round(aot_bytes_vec.clone())?;
 
         for i in 0..aot_bytes_vec.len() {
             println!("\nIteration {}:", i + 1);
             let start = std::time::Instant::now();
-            evaluator.call_program(i).expect("Program call failed");
+            evaluator.call_program(i)?;
             let duration = start.elapsed();
             println!("Iteration {} completed in: {:?}", i + 1, duration);
         }
 
         println!("All iterations completed successfully.");
+        Ok(())
     }
 }

@@ -1,6 +1,8 @@
 use crate::unsafe_wamr_fns;
 use crate::wamr;
-use crate::{ERROR_BUFFER_SIZE, STACK_SIZE};
+use crate::{ERROR_BUFFER_SIZE, Result, STACK_SIZE};
+use color_eyre::eyre::{ensure, eyre};
+use std::convert::TryFrom;
 pub struct Program {
     module: *mut wamr::WASMModuleCommon,
     instance: *mut wamr::WASMModuleInstanceCommon,
@@ -20,41 +22,55 @@ impl Drop for Program {
 }
 
 impl Program {
-    pub fn new(aot_bytes: &mut [u8], err_buf: &mut [i8], app_heap_size: usize) -> Self {
+    pub fn new(aot_bytes: &mut [u8], err_buf: &mut [i8], app_heap_size: usize) -> Result<Self> {
+        ensure!(
+            err_buf.len() >= ERROR_BUFFER_SIZE,
+            "Error buffer must be at least {ERROR_BUFFER_SIZE} bytes"
+        );
+        err_buf.fill(0);
+
+        let aot_len =
+            u32::try_from(aot_bytes.len()).map_err(|_| eyre!("AOT length exceeds u32::MAX"))?;
+        let err_buf_len = u32::try_from(ERROR_BUFFER_SIZE)
+            .map_err(|_| eyre!("ERROR_BUFFER_SIZE exceeds u32::MAX"))?;
+        let app_heap_size =
+            u32::try_from(app_heap_size).map_err(|_| eyre!("App heap size exceeds u32::MAX"))?;
+
         let module = unsafe_wamr_fns::wasm_runtime_load(
             aot_bytes.as_mut_ptr(),
-            aot_bytes.len().try_into().expect("should fit"),
+            aot_len,
             err_buf.as_mut_ptr(),
-            ERROR_BUFFER_SIZE.try_into().expect("should fit"),
+            err_buf_len,
         );
 
         if module.is_null() {
-            panic!(
-                "Failed to load WASM module: {}",
-                unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
-                    .to_string_lossy()
-                    .into_owned()
-            );
+            let err_msg = unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
+                .to_string_lossy()
+                .into_owned();
+            return Err(eyre!("Failed to load WASM module: {}", err_msg));
         }
 
         let instance = unsafe_wamr_fns::wasm_runtime_instantiate(
             module,
             STACK_SIZE,
-            app_heap_size as u32,
+            app_heap_size,
             err_buf.as_mut_ptr(),
-            ERROR_BUFFER_SIZE as u32,
+            err_buf_len,
         );
 
         if instance.is_null() {
             unsafe_wamr_fns::wasm_runtime_unload(module);
-            panic!("Failed to instantiate WASM module");
+            let err_msg = unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
+                .to_string_lossy()
+                .into_owned();
+            return Err(eyre!("Failed to instantiate WASM module: {}", err_msg));
         }
 
         let exec_env = unsafe_wamr_fns::wasm_runtime_create_exec_env(instance, STACK_SIZE);
         if exec_env.is_null() {
             unsafe_wamr_fns::wasm_runtime_deinstantiate(instance);
             unsafe_wamr_fns::wasm_runtime_unload(module);
-            panic!("Failed to create execution environment");
+            return Err(eyre!("Failed to create execution environment"));
         }
 
         let program_func =
@@ -64,20 +80,22 @@ impl Program {
             unsafe_wamr_fns::wasm_runtime_destroy_exec_env(exec_env);
             unsafe_wamr_fns::wasm_runtime_deinstantiate(instance);
             unsafe_wamr_fns::wasm_runtime_unload(module);
-            panic!("Failed to find 'program' function");
+            return Err(eyre!("Failed to find 'program' function"));
         }
 
-        Program {
+        Ok(Program {
             module,
             instance,
             exec_env,
             program_func,
-        }
+        })
     }
 
-    pub fn call(&self) -> u64 {
+    pub fn call(&self) -> Result<u64> {
+        let kind = u8::try_from(wamr::wasm_valkind_enum_WASM_I64)
+            .map_err(|_| eyre!("WASM value kind does not fit in u8"))?;
         let mut call_results = [wamr::wasm_val_t {
-            kind: wamr::wasm_valkind_enum_WASM_I64.try_into().unwrap(),
+            kind,
             of: wamr::wasm_val_t__bindgen_ty_1 { i64_: 0 },
             ..Default::default()
         }];
@@ -99,9 +117,9 @@ impl Program {
                     .into_owned()
             };
 
-            panic!("WASM function call failed: {}", msg);
+            return Err(eyre!("WASM function call failed: {}", msg));
         }
 
-        unsafe_wamr_fns::wasm_val_t_get_i64(&call_results[0]) as u64
+        Ok(unsafe_wamr_fns::wasm_val_t_get_i64(&call_results[0]) as u64)
     }
 }

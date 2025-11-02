@@ -1,6 +1,7 @@
 use crate::program::Program;
 use crate::runtime::WamrRuntime;
-use crate::{APP_HEAP_SIZE, ERROR_BUFFER_SIZE};
+use crate::{APP_HEAP_SIZE, ERROR_BUFFER_SIZE, Result};
+use color_eyre::eyre::eyre;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -16,7 +17,7 @@ struct SharedEvaluatorState {
 pub struct Evaluator<'runtime> {
     state: Arc<Mutex<SharedEvaluatorState>>,
     current_idx: usize,
-    init_thread: Option<thread::JoinHandle<Result<(), String>>>,
+    init_thread: Option<thread::JoinHandle<Result<()>>>,
     _runtime: &'runtime WamrRuntime,
 }
 
@@ -50,31 +51,40 @@ impl<'runtime> Evaluator<'runtime> {
         state: Arc<Mutex<SharedEvaluatorState>>,
         current_idx: usize,
         mut aot_bytes_vec: Vec<Vec<u8>>,
-    ) -> Result<(), String> {
+    ) -> Result<()> {
         let prev_idx = (current_idx + 2) % 3;
         let next_idx = (current_idx + 1) % 3;
 
         {
-            let mut state_guard = state.lock().unwrap();
+            let mut state_guard = state
+                .lock()
+                .map_err(|err| eyre!("Failed to lock evaluator state: {err}"))?;
             for idx in 0..state_guard.program_lens[prev_idx] {
                 state_guard.programs[prev_idx][idx] = None;
             }
+            state_guard.program_lens[prev_idx] = 0;
         }
 
         let len = aot_bytes_vec.len();
+        if len > MAX_PROGRAMS {
+            return Err(eyre!(
+                "AOT byte vector exceeds MAX_PROGRAMS ({MAX_PROGRAMS}), got {len}"
+            ));
+        }
 
         const INIT: Option<Program> = None;
         let mut new_programs: [Option<Program>; MAX_PROGRAMS] = [INIT; MAX_PROGRAMS];
 
         for (i, aot_bytes) in aot_bytes_vec.iter_mut().enumerate() {
             let mut err_buf = [0i8; ERROR_BUFFER_SIZE];
-            let program = Program::new(aot_bytes, &mut err_buf, APP_HEAP_SIZE);
-
+            let program = Program::new(aot_bytes, &mut err_buf, APP_HEAP_SIZE)?;
             new_programs[i] = Some(program);
         }
 
         {
-            let mut state_guard = state.lock().unwrap();
+            let mut state_guard = state
+                .lock()
+                .map_err(|err| eyre!("Failed to lock evaluator state: {err}"))?;
             for (idx, program) in new_programs.into_iter().enumerate() {
                 state_guard.programs[next_idx][idx] = program;
             }
@@ -86,11 +96,10 @@ impl<'runtime> Evaluator<'runtime> {
 
     // NOTE: We need ownership of aot_bytes_vec because WAMR may modify it. We'll let the
     // caller worry about whether they need to clone it, but in most real-world cases they won't
-    pub fn next_round(&mut self, aot_bytes_vec: Vec<Vec<u8>>) -> Result<(), String> {
+    pub fn next_round(&mut self, aot_bytes_vec: Vec<Vec<u8>>) -> Result<()> {
         if let Some(thread) = self.init_thread.take() {
-            thread
-                .join()
-                .map_err(|_| "Thread join failed".to_string())??;
+            let join_result = thread.join().map_err(|_| eyre!("Thread join failed"))?;
+            join_result?;
         }
 
         self.current_idx = (self.current_idx + 1) % 3;
@@ -105,23 +114,28 @@ impl<'runtime> Evaluator<'runtime> {
         Ok(())
     }
 
-    pub fn wait_for_init(&mut self) -> Result<(), String> {
+    pub fn wait_for_init(&mut self) -> Result<()> {
         if let Some(thread) = self.init_thread.take() {
-            thread
-                .join()
-                .map_err(|_| "Thread join failed".to_string())??;
+            let join_result = thread.join().map_err(|_| eyre!("Thread join failed"))?;
+            join_result?;
         }
         Ok(())
     }
 
-    pub fn call_program(&self, program_idx: usize) -> Result<u64, String> {
-        let state_guard = self.state.lock().unwrap();
+    pub fn call_program(&self, program_idx: usize) -> Result<u64> {
+        let state_guard = self
+            .state
+            .lock()
+            .map_err(|err| eyre!("Failed to lock evaluator state: {err}"))?;
 
-        if let Some(program) = &state_guard.programs[self.current_idx][program_idx] {
-            let res = program.call();
-            Ok(res)
+        let program_entry = state_guard.programs[self.current_idx]
+            .get(program_idx)
+            .ok_or_else(|| eyre!("Program index {program_idx} out of range"))?;
+
+        if let Some(program) = program_entry {
+            program.call()
         } else {
-            Err(format!("Program at index {} not found", program_idx))
+            Err(eyre!("Program at index {program_idx} not found"))
         }
     }
 }

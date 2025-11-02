@@ -156,6 +156,7 @@ static RUNTIME: LazyLock<WamrRuntime> = LazyLock::new(|| {
         host_gas_check_impl,
         AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
     )
+    .expect("should be able to create AVM WAMR runtime")
 });
 
 static EVALUATOR: OnceLock<Mutex<Evaluator>> = OnceLock::new();
@@ -176,9 +177,11 @@ pub extern "C" fn test_avm_prep_round() {
         "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_blank_key.wasm",
     );
     let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-    let mut err_buf = Vec::with_capacity(wamrtime::ERROR_BUFFER_SIZE);
+    let mut err_buf = vec![0i8; wamrtime::ERROR_BUFFER_SIZE];
     let compiler = Compiler::new(runtime);
-    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf);
+    let aot_bytes = compiler
+        .compile_wasm(&mut wasm_bytes, &mut err_buf)
+        .expect("should be able to compile wasm");
 
     let aot_bytes_vec = vec![aot_bytes.clone()];
 
@@ -311,9 +314,11 @@ mod tests {
 
         let wasm_path = PathBuf::from(wasm_file);
         let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-        let mut err_buf = Vec::with_capacity(wamrtime::ERROR_BUFFER_SIZE);
+        let mut err_buf = vec![0i8; wamrtime::ERROR_BUFFER_SIZE];
         let compiler = Compiler::new(runtime);
-        let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf);
+        let aot_bytes = compiler
+            .compile_wasm(&mut wasm_bytes, &mut err_buf)
+            .expect("should be able to compile wasm");
 
         let mut evaluator = Evaluator::new(runtime);
 

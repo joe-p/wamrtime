@@ -7,6 +7,7 @@ edition = "2024"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
+color-eyre = "0.6"
 radix-wasm-instrument = { git = "https://github.com/radixdlt/wasm-instrument/", version = "1.0.0" }
 
 [build-dependencies]
