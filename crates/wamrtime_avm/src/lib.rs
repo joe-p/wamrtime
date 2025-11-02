@@ -202,15 +202,42 @@ pub extern "C" fn test_avm_prep_round() {
     evaluator.wait_for_init().expect("Wait for init failed");
 }
 
+/// # Safety
+/// We assume the exec_env and msg_ptr are valid pointers.
 #[unsafe(no_mangle)]
-pub extern "C" fn test_avm_run_program() {
+pub unsafe extern "C" fn avm_set_exception(
+    exec_env: *mut wamrtime::wamr::WASMExecEnv,
+    msg_ptr: *const i8,
+) {
+    let module_inst = unsafe { wamrtime::wamr::wasm_runtime_get_module_inst(exec_env) };
+    unsafe {
+        wamrtime::wamr::wasm_runtime_set_exception(module_inst, msg_ptr);
+    }
+}
+
+/// # Safety
+/// We assume the err_buf is valid for writes of at least err_buf_len bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn test_avm_run_program(err_buf: *mut u8, err_buf_len: u64) -> u64 {
     let evaluator = EVALUATOR
         .get()
         .expect("Evaluator not initialized")
         .lock()
         .unwrap();
 
-    evaluator.call_program(0).expect("Program call failed");
+    match evaluator.call_program(0) {
+        Ok(_) => 0,
+        Err(e) => {
+            let err_msg_str = e.to_string();
+            let err_msg = err_msg_str.as_bytes();
+
+            let write_len = (err_msg.len() as u64).min(err_buf_len);
+            unsafe {
+                std::ptr::copy_nonoverlapping(err_msg.as_ptr(), err_buf, write_len as usize);
+            }
+            write_len
+        }
+    }
 }
 
 #[cfg(test)]
