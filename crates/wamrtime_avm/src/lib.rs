@@ -2,7 +2,6 @@ use std::ffi::c_void;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex, OnceLock};
-use std::time::Instant;
 
 use wamrtime::compiler::Compiler;
 use wamrtime::evaluator::Evaluator;
@@ -209,48 +208,14 @@ pub extern "C" fn test_avm_run_program() {
     evaluator.call_program(0).expect("Program call failed");
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn test_run() {
-    let runtime = WamrRuntime::new(
-        host_gas_check_impl,
-        AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
-    );
-
-    let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm.wasm");
-    let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-    let mut err_buf = Vec::with_capacity(wamrtime::ERROR_BUFFER_SIZE);
-    let compiler = Compiler::new(&runtime);
-    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf);
-
-    let mut evaluator = Evaluator::new(&runtime);
-
-    let aot_bytes_vec = vec![aot_bytes.clone(); 10];
-
-    evaluator
-        .next_round(aot_bytes_vec.clone())
-        .expect("Initial round failed");
-
-    evaluator
-        .next_round(aot_bytes_vec.clone())
-        .expect("Second round failed");
-
-    for i in 0..aot_bytes_vec.len() {
-        println!("\nIteration {}:", i + 1);
-        let start = Instant::now();
-        evaluator.call_program(i).expect("Program call failed");
-        let duration = start.elapsed();
-        println!("Iteration {} executed in {} ns", i + 1, duration.as_nanos());
-    }
-
-    println!("All iterations completed successfully.");
-}
-
 #[cfg(test)]
 mod tests {
     use std::{
         collections::HashMap,
         sync::{LazyLock, Mutex},
     };
+
+    use std::time::Instant;
 
     use super::*;
 
@@ -333,26 +298,22 @@ mod tests {
         state.insert(key, value);
     }
 
-    #[test]
-    fn test_avm() {
+    fn run_wasm_test(wasm_file: &str) {
         avm_init(
             rust_impl_get_global_uint,
             rust_impl_set_global_uint,
             rust_impl_get_global_bytes,
             rust_impl_set_global_bytes,
         );
-        let runtime = WamrRuntime::new(
-            host_gas_check_impl,
-            AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
-        );
+        let runtime = RUNTIME.deref();
 
-        let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm_complex.wasm");
+        let wasm_path = PathBuf::from(wasm_file);
         let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
         let mut err_buf = Vec::with_capacity(wamrtime::ERROR_BUFFER_SIZE);
-        let compiler = Compiler::new(&runtime);
+        let compiler = Compiler::new(runtime);
         let aot_bytes = compiler.compile_wasm(&mut wasm_bytes, &mut err_buf);
 
-        let mut evaluator = Evaluator::new(&runtime);
+        let mut evaluator = Evaluator::new(runtime);
 
         let aot_bytes_vec = vec![aot_bytes.clone(); 10];
 
@@ -373,5 +334,19 @@ mod tests {
         }
 
         println!("All iterations completed successfully.");
+    }
+
+    #[test]
+    fn test_avm_blank_key() {
+        run_wasm_test(
+            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_blank_key.wasm",
+        );
+    }
+
+    #[test]
+    fn test_avm_complex() {
+        run_wasm_test(
+            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_complex.wasm",
+        );
     }
 }
