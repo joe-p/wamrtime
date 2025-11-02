@@ -32,7 +32,6 @@ impl<'runtime> Compiler<'runtime> {
     }
 
     pub fn compile_wasm(&self, raw_wasm_bytes: &mut [u8], err_buf: &mut [i8]) -> Result<Vec<u8>> {
-        println!("erro buf len: {}", err_buf.len());
         ensure!(
             err_buf.len() >= ERROR_BUFFER_SIZE,
             "Error buffer must be at least {ERROR_BUFFER_SIZE} bytes"
