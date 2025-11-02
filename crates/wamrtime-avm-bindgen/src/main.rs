@@ -205,7 +205,7 @@ fn generate_cgo_code(functions: &[Function]) -> String {
         output.push_str("}\n\n");
     }
 
-    let mut init_params = vec!["void* ctx".to_string()];
+    let mut init_params = vec![];
     for func in functions {
         let camel_name = to_camel_case(&func.name);
         init_params.push(format!("{}Fn {}_impl", camel_name, func.name));
