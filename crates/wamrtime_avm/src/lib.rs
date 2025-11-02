@@ -172,7 +172,9 @@ pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
 #[unsafe(no_mangle)]
 pub extern "C" fn test_avm_prep_round() {
     let runtime = RUNTIME.deref();
-    let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm.wasm");
+    let wasm_path = PathBuf::from(
+        "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_blank_key.wasm",
+    );
     let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
     let mut err_buf = Vec::with_capacity(wamrtime::ERROR_BUFFER_SIZE);
     let compiler = Compiler::new(runtime);
