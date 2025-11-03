@@ -69,7 +69,7 @@ avm_host_functions! {
     avm_set_global_uint(app: u64, key_ptr: *const u8, key_len: u32, value: u64);
     avm_get_global_bytes(app: u64, key_ptr: *const u8, key_len: u32, dest_ptr: *mut u8, dest_len: u32) -> i32;
     avm_set_global_bytes(app: u64, key_ptr: *const u8, key_len: u32, src_ptr: *const u8, src_len: u32);
-    amv_get_global_var_uint(field_index: u64) -> u64;
+    avm_get_global_var_uint(field_index: u64) -> u64;
 }
 
 enum AvmType {
@@ -138,10 +138,10 @@ const AVM_FUNCTIONS: &[AvmFunction] = &[
         host_func: avm_set_global_bytes as *mut c_void,
     },
     AvmFunction {
-        name: "amv_get_global_var_uint",
+        name: "avm_get_global_var_uint",
         args: &[AvmType::U64],
         returns: Some(AvmType::U64),
-        host_func: amv_get_global_var_uint as *mut c_void,
+        host_func: avm_get_global_var_uint as *mut c_void,
     },
 ];
 
@@ -338,7 +338,7 @@ mod tests {
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn rust_impl_amv_get_global_var_uint(
+    pub extern "C" fn rust_impl_avm_get_global_var_uint(
         _exec_env: *mut wamrtime::wamr::WASMExecEnv,
         _ctx: *mut c_void,
         field_index: u64,
@@ -355,7 +355,7 @@ mod tests {
             rust_impl_set_global_uint,
             rust_impl_get_global_bytes,
             rust_impl_set_global_bytes,
-            rust_impl_amv_get_global_var_uint,
+            rust_impl_avm_get_global_var_uint,
         );
         let runtime = RUNTIME.deref();
 

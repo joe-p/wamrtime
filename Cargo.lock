@@ -27,6 +27,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "algokit"
+version = "0.1.0"
+
+[[package]]
 name = "anyhow"
 version = "1.0.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -41,10 +45,16 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 [[package]]
 name = "avm_blank_key"
 version = "0.1.0"
+dependencies = [
+ "algokit",
+]
 
 [[package]]
 name = "avm_complex"
 version = "0.1.0"
+dependencies = [
+ "algokit",
+]
 
 [[package]]
 name = "backtrace"

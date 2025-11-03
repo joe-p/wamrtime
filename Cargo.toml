@@ -5,7 +5,7 @@ members = [
     "crates/wamrtime",
     "crates/wamrtime_avm",
     "wasm_crates/avm_complex",
-    "wasm_crates/avm_blank_key",
+    "wasm_crates/avm_blank_key", "crates/algokit",
 ]
 
 [profile.wasm_dev]
