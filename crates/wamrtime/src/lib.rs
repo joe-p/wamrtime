@@ -21,11 +21,8 @@ const APP_HEAP_SIZE: usize = 32 * KB;
 /// The maximum number of WAMR programs that can be called per outer call
 const MAX_WAMR_PROGRAM_REFERENCES: usize = 256;
 
-/// The maximum number of outer calls in a group
-const MAX_OUTER_CALLS: usize = 16;
-
 /// The total runtime heap size needed to support all WAMR possible programs
-const RUNTIME_HEAP_SIZE: usize = APP_HEAP_SIZE * (MAX_WAMR_PROGRAM_REFERENCES + MAX_OUTER_CALLS);
+const RUNTIME_HEAP_SIZE: usize = APP_HEAP_SIZE * MAX_WAMR_PROGRAM_REFERENCES;
 
 /// Since everything is AoT, we don't use the WASM stack
 /// See https://bytecodealliance.github.io/wamr.dev/blog/understand-the-wamr-stacks/
