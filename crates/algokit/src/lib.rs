@@ -9,6 +9,10 @@ fn panic(_: &PanicInfo) -> ! {
 
 const MAX_GLOBAL_VALUE_SIZE: usize = 128;
 
+pub enum AlgokitError {
+    DeserializationFailed,
+}
+
 pub fn panic() -> ! {
     #[cfg(target_arch = "wasm32")]
     core::arch::wasm32::unreachable();
@@ -70,6 +74,94 @@ pub fn set_global_bytes(app: u64, key: &[u8], src: &[u8]) {
             src.len() as u32,
         )
     };
+}
+
+pub struct GlobalUint<ValueType = u64> {
+    pub key: &'static [u8],
+    phantom: core::marker::PhantomData<ValueType>,
+}
+
+impl<ValueType> GlobalUint<ValueType> {
+    pub const fn new(key: &'static [u8]) -> Self {
+        GlobalUint {
+            key,
+            phantom: core::marker::PhantomData,
+        }
+    }
+
+    #[inline(always)]
+    fn app_id(&self) -> u64 {
+        get_global_var_uint(GlobalVar::AppID)
+    }
+}
+
+impl<T> GlobalUint<T>
+where
+    T: From<u64>,
+    T: Into<u64> + Copy,
+{
+    pub fn get(&self) -> T {
+        let value = get_global_uint(self.app_id(), self.key);
+        T::from(value)
+    }
+
+    pub fn set(&self, value: T) {
+        set_global_uint(self.app_id(), self.key, value.into());
+    }
+}
+
+pub struct GlobalBytes<ValueType = &'static [u8]> {
+    pub key: &'static [u8],
+    phantom: core::marker::PhantomData<ValueType>,
+}
+
+impl<ValueType> GlobalBytes<ValueType> {
+    pub const fn new(key: &'static [u8]) -> Self {
+        GlobalBytes {
+            key,
+            phantom: core::marker::PhantomData,
+        }
+    }
+
+    #[inline(always)]
+    fn app_id(&self) -> u64 {
+        get_global_var_uint(GlobalVar::AppID)
+    }
+}
+
+impl<T> GlobalBytes<T> {
+    pub fn set_raw_bytes(&self, value: &[u8]) {
+        set_global_bytes(self.app_id(), self.key, value);
+    }
+}
+
+impl<T> GlobalBytes<T>
+where
+    T: AsRef<[u8]>,
+{
+    pub fn set(&self, value: &T) {
+        set_global_bytes(self.app_id(), self.key, value.as_ref());
+    }
+}
+
+impl<T> GlobalBytes<T>
+where
+    T: for<'a> TryFrom<&'a [u8]>,
+{
+    pub fn try_get(&self) -> core::result::Result<T, AlgokitError> {
+        let bytes = get_global_bytes(self.app_id(), self.key);
+        T::try_from(bytes.as_slice()).map_err(|_| AlgokitError::DeserializationFailed)
+    }
+}
+
+impl<T> GlobalBytes<T>
+where
+    T: for<'a> From<&'a [u8]>,
+{
+    pub fn get(&self) -> T {
+        let bytes = get_global_bytes(self.app_id(), self.key);
+        T::from(bytes.as_slice())
+    }
 }
 
 #[repr(u64)]

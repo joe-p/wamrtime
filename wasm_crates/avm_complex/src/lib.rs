@@ -1,37 +1,35 @@
 #![no_std]
 
-use algokit::{
-    GlobalVar, get_global_bytes, get_global_uint, get_global_var_uint, set_global_bytes,
-    set_global_uint,
-};
+extern crate alloc;
 
-const KEY: &[u8] = b"foo";
-const VALUE_BYTES: &[u8] = b"Hello AVM!";
+use algokit::{GlobalBytes, GlobalUint};
+use alloc::vec::Vec;
+
+const GLOBAL_UINT_VALUE: GlobalUint = GlobalUint::new(b"foo");
+const GLOBAL_BYTES_VALUE: GlobalBytes<Vec<u8>> = GlobalBytes::new(b"foo");
 
 #[unsafe(export_name = "program")]
 pub extern "C" fn program() -> u64 {
-    let app_id = get_global_var_uint(GlobalVar::AppID);
-
-    let mut value = get_global_uint(app_id, KEY);
+    let mut value = GLOBAL_UINT_VALUE.get();
     if value != 0 {
         algokit::panic();
     }
 
-    set_global_uint(app_id, KEY, 7);
+    GLOBAL_UINT_VALUE.set(7);
 
-    value = get_global_uint(app_id, KEY);
+    value = GLOBAL_UINT_VALUE.get();
 
     if value != 7 {
         algokit::panic();
     }
 
-    set_global_uint(app_id, KEY, 0);
+    GLOBAL_UINT_VALUE.set(0);
 
-    set_global_bytes(app_id, KEY, VALUE_BYTES);
+    GLOBAL_BYTES_VALUE.set_raw_bytes(b"hello AVM!");
 
-    let retrieved_value = get_global_bytes(app_id, KEY);
+    let retrieved_value = GLOBAL_BYTES_VALUE.get();
 
-    if retrieved_value.as_slice() != VALUE_BYTES {
+    if retrieved_value.as_slice() != b"hello AVM!" {
         algokit::panic();
     }
 
