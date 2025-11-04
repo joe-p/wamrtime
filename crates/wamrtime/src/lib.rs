@@ -16,7 +16,7 @@ pub const ERROR_BUFFER_SIZE: usize = 128;
 const KB: usize = 1024;
 
 /// The size of the heap that each WAMR program gets
-const APP_HEAP_SIZE: usize = 32 * KB;
+const APP_HEAP_SIZE: usize = 256 * KB;
 
 /// The maximum number of WAMR programs that can be called per outer call
 const MAX_WAMR_PROGRAM_REFERENCES: usize = 256;

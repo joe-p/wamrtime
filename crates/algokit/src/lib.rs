@@ -98,7 +98,7 @@ impl<ValueType> GlobalUint<ValueType> {
 impl<T> GlobalUint<T>
 where
     T: From<u64>,
-    T: Into<u64> + Copy,
+    T: Into<u64>,
 {
     pub fn get(&self) -> T {
         let value = get_global_uint(self.app_id(), self.key);
