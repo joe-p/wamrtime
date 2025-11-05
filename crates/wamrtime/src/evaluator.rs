@@ -1,11 +1,12 @@
 use crate::program::Program;
 use crate::runtime::WamrRuntime;
-use crate::{APP_HEAP_SIZE, ERROR_BUFFER_SIZE, Result};
+use crate::{ERROR_BUFFER_SIZE, Result};
 use color_eyre::eyre::eyre;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 const MAX_PROGRAMS: usize = 256;
+const MAX_APP_MEMORY: usize = 128 * 1024; // 64 KB
 
 type ProgramArray = [Option<Program>; MAX_PROGRAMS];
 
@@ -77,7 +78,7 @@ impl<'runtime> Evaluator<'runtime> {
 
         for (i, aot_bytes) in aot_bytes_vec.iter_mut().enumerate() {
             let mut err_buf = [0i8; ERROR_BUFFER_SIZE];
-            let program = Program::new(aot_bytes, &mut err_buf, APP_HEAP_SIZE)?;
+            let program = Program::new(aot_bytes, &mut err_buf, MAX_APP_MEMORY)?;
             new_programs[i] = Some(program);
         }
 

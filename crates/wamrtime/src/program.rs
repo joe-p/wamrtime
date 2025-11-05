@@ -50,10 +50,33 @@ impl Program {
             return Err(eyre!("Failed to load WASM module: {}", err_msg));
         }
 
-        let instance = unsafe_wamr_fns::wasm_runtime_instantiate(
+        let mut max_pages = app_heap_size / (64 * 1024);
+
+        let export_count = unsafe_wamr_fns::wasm_runtime_get_export_count(module);
+        for i in 0..export_count {
+            let mut export_info: wamr::wasm_export_t = Default::default();
+            unsafe_wamr_fns::wasm_runtime_get_export_type(module, i, &mut export_info);
+
+            if export_info.kind == wamr::wasm_import_export_kind_t_WASM_IMPORT_EXPORT_KIND_MEMORY {
+                max_pages = core::cmp::min(
+                    unsafe_wamr_fns::wasm_memory_type_get_max_page_count(unsafe {
+                        export_info.u.memory_type
+                    }),
+                    max_pages,
+                );
+                break;
+            }
+        }
+
+        let inst_args = wamr::InstantiationArgs {
+            default_stack_size: 0,
+            host_managed_heap_size: app_heap_size,
+            max_memory_pages: max_pages,
+        };
+
+        let instance = unsafe_wamr_fns::wasm_runtime_instantiate_ex(
             module,
-            STACK_SIZE,
-            app_heap_size,
+            &inst_args,
             err_buf.as_mut_ptr(),
             err_buf_len,
         );

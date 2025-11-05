@@ -1,11 +1,5 @@
-#[cfg(target_arch = "wasm32")]
-use core::panic::PanicInfo;
-
-#[cfg(target_arch = "wasm32")]
-#[panic_handler]
-fn panic(_: &PanicInfo) -> ! {
-    core::arch::wasm32::unreachable();
-}
+#!no_std]
+use core::alloc::{GlobalAlloc, Layout};
 
 const MAX_GLOBAL_VALUE_SIZE: usize = 128;
 
@@ -13,7 +7,27 @@ pub enum AlgokitError {
     DeserializationFailed,
 }
 
-pub fn panic() -> ! {
+unsafe extern "C" {
+    fn host_malloc(size: u64) -> u64;
+    fn host_free(ptr: u64);
+}
+
+struct WamrAlloc;
+
+unsafe impl GlobalAlloc for WamrAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        unsafe { host_malloc(layout.size() as u64) as *mut u8 }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        unsafe { host_free(ptr as u64) }
+    }
+}
+
+#[global_allocator]
+static GA: WamrAlloc = WamrAlloc;
+
+pub fn avm_panic() -> ! {
     #[cfg(target_arch = "wasm32")]
     core::arch::wasm32::unreachable();
 

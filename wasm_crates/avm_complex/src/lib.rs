@@ -12,7 +12,7 @@ const GLOBAL_BYTES_VALUE: GlobalBytes<Vec<u8>> = GlobalBytes::new(b"foo");
 pub extern "C" fn program() -> u64 {
     let mut value = GLOBAL_UINT_VALUE.get();
     if value != 0 {
-        algokit::panic();
+        algokit::avm_panic();
     }
 
     GLOBAL_UINT_VALUE.set(7);
@@ -20,7 +20,7 @@ pub extern "C" fn program() -> u64 {
     value = GLOBAL_UINT_VALUE.get();
 
     if value != 7 {
-        algokit::panic();
+        algokit::avm_panic();
     }
 
     GLOBAL_UINT_VALUE.set(0);
@@ -30,7 +30,7 @@ pub extern "C" fn program() -> u64 {
     let retrieved_value = GLOBAL_BYTES_VALUE.get();
 
     if retrieved_value.as_slice() != b"hello AVM!" {
-        algokit::panic();
+        algokit::avm_panic();
     }
 
     0

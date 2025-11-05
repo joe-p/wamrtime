@@ -7,6 +7,38 @@
 //! without any changes to the signature or behavior.
 use crate::wamr;
 
+pub fn wasm_memory_type_get_max_page_count(memory_type: wamr::wasm_memory_type_t) -> u32 {
+    unsafe { wamr::wasm_memory_type_get_max_page_count(memory_type) }
+}
+
+pub fn wasm_runtime_get_export_type(
+    module: wamr::wasm_module_t,
+    export_index: i32,
+    export_type: *mut wamr::wasm_export_t,
+) {
+    unsafe {
+        wamr::wasm_runtime_get_export_type(module, export_index, export_type);
+    }
+}
+
+pub fn wasm_runtime_get_export_count(module: wamr::wasm_module_t) -> i32 {
+    unsafe { wamr::wasm_runtime_get_export_count(module) }
+}
+
+pub fn wasm_runtime_module_malloc(
+    module_inst: wamr::wasm_module_inst_t,
+    size: u64,
+    p_native_addr: *mut *mut ::std::os::raw::c_void,
+) -> u64 {
+    unsafe { wamr::wasm_runtime_module_malloc(module_inst, size, p_native_addr) }
+}
+
+pub fn wasm_runtime_module_free(module_inst: wamr::wasm_module_inst_t, ptr: u64) {
+    unsafe {
+        wamr::wasm_runtime_module_free(module_inst, ptr);
+    }
+}
+
 pub fn wasm_runtime_destroy_exec_env(exec_env: *mut wamr::WASMExecEnv) {
     unsafe {
         wamr::wasm_runtime_destroy_exec_env(exec_env);
@@ -34,22 +66,13 @@ pub fn wasm_runtime_load(
     unsafe { wamr::wasm_runtime_load(buf, size, error_buf, error_buf_size) }
 }
 
-pub fn wasm_runtime_instantiate(
+pub fn wasm_runtime_instantiate_ex(
     module: wamr::wasm_module_t,
-    default_stack_size: u32,
-    host_managed_heap_size: u32,
+    args: *const wamr::InstantiationArgs,
     error_buf: *mut ::std::os::raw::c_char,
     error_buf_size: u32,
 ) -> wamr::wasm_module_inst_t {
-    unsafe {
-        wamr::wasm_runtime_instantiate(
-            module,
-            default_stack_size,
-            host_managed_heap_size,
-            error_buf,
-            error_buf_size,
-        )
-    }
+    unsafe { wamr::wasm_runtime_instantiate_ex(module, args, error_buf, error_buf_size) }
 }
 
 pub fn wasm_runtime_create_exec_env(

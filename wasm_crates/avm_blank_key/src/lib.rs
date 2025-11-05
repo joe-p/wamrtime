@@ -10,7 +10,7 @@ pub extern "C" fn program() -> u64 {
 
     let mut value = get_global_uint(app_id, KEY);
     if value != 0 {
-        algokit::panic();
+        algokit::avm_panic();
     }
 
     set_global_uint(app_id, KEY, 7);
@@ -18,7 +18,7 @@ pub extern "C" fn program() -> u64 {
     value = get_global_uint(app_id, KEY);
 
     if value != 7 {
-        algokit::panic();
+        algokit::avm_panic();
     }
 
     set_global_uint(app_id, KEY, 0);

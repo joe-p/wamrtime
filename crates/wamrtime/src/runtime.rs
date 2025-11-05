@@ -26,6 +26,20 @@ impl Drop for WamrRuntime {
 
 type HostGasCheckFn = unsafe extern "C" fn(exec_env: *mut c_void, requested_gas: i64);
 
+extern "C" fn host_malloc(exec_env: *mut c_void, size: u64) -> u64 {
+    let module_inst =
+        unsafe { wamr::wasm_runtime_get_module_inst(exec_env as *mut wamr::WASMExecEnv) };
+
+    unsafe_wamr_fns::wasm_runtime_module_malloc(module_inst, size, std::ptr::null_mut())
+}
+
+extern "C" fn host_free(exec_env: *mut c_void, ptr: u64) {
+    let module_inst =
+        unsafe { wamr::wasm_runtime_get_module_inst(exec_env as *mut wamr::WASMExecEnv) };
+
+    unsafe_wamr_fns::wasm_runtime_module_free(module_inst, ptr);
+}
+
 pub enum WamrType {
     I64,
     I32,
@@ -123,9 +137,23 @@ impl WamrRuntime {
             ..Default::default()
         });
 
+        native_symbols.push(wamr::NativeSymbol {
+            symbol: c"host_malloc".as_ptr(),
+            func_ptr: host_malloc as *mut c_void,
+            signature: c"(I)I".as_ptr(),
+            ..Default::default()
+        });
+
+        native_symbols.push(wamr::NativeSymbol {
+            symbol: c"host_free".as_ptr(),
+            func_ptr: host_free as *mut c_void,
+            signature: c"(I)".as_ptr(),
+            ..Default::default()
+        });
+
         let runtime = WamrRuntime {
             native_symbols,
-            heap: Vec::with_capacity(RUNTIME_HEAP_SIZE),
+            heap: vec![0u8; RUNTIME_HEAP_SIZE],
             _c_strings: c_strings,
         };
 

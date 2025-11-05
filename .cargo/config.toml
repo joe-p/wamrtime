@@ -1,2 +1,9 @@
 [alias]
 t = "nextest run --success-output immediate"
+
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-C", "link-arg=-zstack-size=65536",
+    "-C", "link-arg=--initial-memory=131072", # 2 pages = 128 KiB 
+    "-C", "link-arg=--max-memory=131072"
+]
