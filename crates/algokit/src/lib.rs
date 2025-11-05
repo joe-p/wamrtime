@@ -156,6 +156,13 @@ impl GlobalBytes<&[u8]> {
         read_global_bytes(self.app_id(), self.key, buf)
     }
 
+    pub fn read<'buf>(&self, buf: &'buf mut [u8]) -> &'buf [u8] {
+        match read_global_bytes(self.app_id(), self.key, buf) {
+            Ok(v) => v,
+            Err(_) => avm_panic(),
+        }
+    }
+
     pub fn write(&self, value: &[u8]) {
         write_global_bytes(self.app_id(), self.key, value);
     }
