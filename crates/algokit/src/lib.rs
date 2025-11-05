@@ -1,10 +1,8 @@
 #!no_std]
 use core::alloc::{GlobalAlloc, Layout};
 
-const MAX_GLOBAL_VALUE_SIZE: usize = 128;
-
 pub enum AlgokitError {
-    DeserializationFailed,
+    BufferTooSmall,
 }
 
 unsafe extern "C" {
@@ -63,8 +61,11 @@ pub fn set_global_uint(app: u64, key: &[u8], value: u64) {
     unsafe { avm_set_global_uint(app, key.as_ptr(), key.len() as u32, value) };
 }
 
-pub fn get_global_bytes(app: u64, key: &[u8]) -> Vec<u8> {
-    let mut buf = [0u8; MAX_GLOBAL_VALUE_SIZE];
+pub fn read_global_bytes<'buf>(
+    app: u64,
+    key: &[u8],
+    buf: &'buf mut [u8],
+) -> core::result::Result<&'buf [u8], AlgokitError> {
     let ret_len = unsafe {
         avm_get_global_bytes(
             app,
@@ -75,10 +76,14 @@ pub fn get_global_bytes(app: u64, key: &[u8]) -> Vec<u8> {
         ) as usize
     };
 
-    buf[..ret_len].to_vec()
+    if ret_len > buf.len() {
+        return Err(AlgokitError::BufferTooSmall);
+    }
+
+    Ok(&buf[..ret_len])
 }
 
-pub fn set_global_bytes(app: u64, key: &[u8], src: &[u8]) {
+pub fn write_global_bytes(app: u64, key: &[u8], src: &[u8]) {
     unsafe {
         avm_set_global_bytes(
             app,
@@ -143,38 +148,16 @@ impl<ValueType> GlobalBytes<ValueType> {
     }
 }
 
-impl<T> GlobalBytes<T> {
-    pub fn set_raw_bytes(&self, value: &[u8]) {
-        set_global_bytes(self.app_id(), self.key, value);
+impl GlobalBytes<&[u8]> {
+    pub fn try_read<'buf>(
+        &self,
+        buf: &'buf mut [u8],
+    ) -> core::result::Result<&'buf [u8], AlgokitError> {
+        read_global_bytes(self.app_id(), self.key, buf)
     }
-}
 
-impl<T> GlobalBytes<T>
-where
-    T: AsRef<[u8]>,
-{
-    pub fn set(&self, value: &T) {
-        set_global_bytes(self.app_id(), self.key, value.as_ref());
-    }
-}
-
-impl<T> GlobalBytes<T>
-where
-    T: for<'a> TryFrom<&'a [u8]>,
-{
-    pub fn try_get(&self) -> core::result::Result<T, AlgokitError> {
-        let bytes = get_global_bytes(self.app_id(), self.key);
-        T::try_from(bytes.as_slice()).map_err(|_| AlgokitError::DeserializationFailed)
-    }
-}
-
-impl<T> GlobalBytes<T>
-where
-    T: for<'a> From<&'a [u8]>,
-{
-    pub fn get(&self) -> T {
-        let bytes = get_global_bytes(self.app_id(), self.key);
-        T::from(bytes.as_slice())
+    pub fn write(&self, value: &[u8]) {
+        write_global_bytes(self.app_id(), self.key, value);
     }
 }
 
