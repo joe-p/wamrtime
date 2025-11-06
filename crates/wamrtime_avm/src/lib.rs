@@ -305,9 +305,12 @@ mod tests {
 
         let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
 
+        let inst_start = Instant::now();
         let instrumented_bytes = Compiler::new()
             .compile_wasm(&mut wasm_bytes.clone())
             .expect("Failed to compile WASM");
+        let inst_duration = inst_start.elapsed();
+        println!("Instrumentation time: {:?}", inst_duration);
 
         let err_buf = &mut [0i8; 512];
 
