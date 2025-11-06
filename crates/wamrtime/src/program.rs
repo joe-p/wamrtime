@@ -22,23 +22,23 @@ impl Drop for Program {
 }
 
 impl Program {
-    pub fn new(aot_bytes: &mut [u8], err_buf: &mut [i8], app_heap_size: usize) -> Result<Self> {
+    pub fn new(prog_bytes: &mut [u8], err_buf: &mut [i8], app_heap_size: usize) -> Result<Self> {
         ensure!(
             err_buf.len() >= ERROR_BUFFER_SIZE,
             "Error buffer must be at least {ERROR_BUFFER_SIZE} bytes"
         );
         err_buf.fill(0);
 
-        let aot_len =
-            u32::try_from(aot_bytes.len()).map_err(|_| eyre!("AOT length exceeds u32::MAX"))?;
+        let prog_len =
+            u32::try_from(prog_bytes.len()).map_err(|_| eyre!("AOT length exceeds u32::MAX"))?;
         let err_buf_len = u32::try_from(ERROR_BUFFER_SIZE)
             .map_err(|_| eyre!("ERROR_BUFFER_SIZE exceeds u32::MAX"))?;
         let app_heap_size =
             u32::try_from(app_heap_size).map_err(|_| eyre!("App heap size exceeds u32::MAX"))?;
 
         let module = unsafe_wamr_fns::wasm_runtime_load(
-            aot_bytes.as_mut_ptr(),
-            aot_len,
+            prog_bytes.as_mut_ptr(),
+            prog_len,
             err_buf.as_mut_ptr(),
             err_buf_len,
         );
@@ -69,7 +69,7 @@ impl Program {
         }
 
         let inst_args = wamr::InstantiationArgs {
-            default_stack_size: 0,
+            default_stack_size: STACK_SIZE,
             host_managed_heap_size: app_heap_size,
             max_memory_pages: max_pages,
         };

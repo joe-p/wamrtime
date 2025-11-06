@@ -1,10 +1,7 @@
 use std::ffi::c_void;
 use std::ops::Deref;
-use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex, OnceLock};
+use std::sync::LazyLock;
 
-use wamrtime::compiler::Compiler;
-use wamrtime::evaluator::Evaluator;
 use wamrtime::runtime::{WamrHostFunction, WamrRuntime, WamrType};
 
 static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
@@ -46,18 +43,10 @@ macro_rules! avm_host_functions {
                 unsafe {
                     // TODO: Eventually should actually only get called once when creating the
                     // block evaluator
-                    if EVALUATOR.get().is_some() {
-                        return;
-                    }
-
                     $(
                         [<$fn_name:snake:upper _IMPL>] = Some([<$fn_name _impl>]);
                     )*
-                    let runtime = RUNTIME.deref();
-                    let evaluator = Evaluator::new(runtime);
-                    if EVALUATOR.set(Mutex::new(evaluator)).is_err() {
-                        panic!("Evaluator already initialized");
-                    }
+                    let _ = RUNTIME.deref();
                 }
             }
         }
@@ -166,8 +155,6 @@ static RUNTIME: LazyLock<WamrRuntime> = LazyLock::new(|| {
     .expect("should be able to create AVM WAMR runtime")
 });
 
-static EVALUATOR: OnceLock<Mutex<Evaluator>> = OnceLock::new();
-
 #[unsafe(no_mangle)]
 pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
     unsafe {
@@ -176,38 +163,6 @@ pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
 }
 
 // Functions exposed for testing purposes
-
-#[unsafe(no_mangle)]
-pub extern "C" fn test_avm_prep_round() {
-    let runtime = RUNTIME.deref();
-    let wasm_path = PathBuf::from(
-        "/Users/joe/git/algorand/go-algorand/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_blank_key.wasm",
-    );
-    let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-    let mut err_buf = vec![0i8; wamrtime::ERROR_BUFFER_SIZE];
-    let compiler = Compiler::new(runtime);
-    let aot_bytes = compiler
-        .compile_wasm(&mut wasm_bytes, &mut err_buf)
-        .expect("should be able to compile wasm");
-
-    let aot_bytes_vec = vec![aot_bytes.clone()];
-
-    let mut evaluator = EVALUATOR
-        .get()
-        .expect("Evaluator not initialized")
-        .lock()
-        .unwrap();
-
-    evaluator
-        .next_round(aot_bytes_vec.clone())
-        .expect("Initial round failed");
-
-    evaluator
-        .next_round(aot_bytes_vec.clone())
-        .expect("next round failed");
-
-    evaluator.wait_for_init().expect("Wait for init failed");
-}
 
 /// # Safety
 /// We assume the exec_env and msg_ptr are valid pointers.
@@ -222,41 +177,27 @@ pub unsafe extern "C" fn avm_set_exception(
     }
 }
 
-/// # Safety
-/// We assume the err_buf is valid for writes of at least err_buf_len bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn test_avm_run_program(err_buf: *mut u8, err_buf_len: u64) -> u64 {
-    let evaluator = EVALUATOR
-        .get()
-        .expect("Evaluator not initialized")
-        .lock()
-        .unwrap();
-
-    match evaluator.call_program(0) {
-        Ok(_) => 0,
-        Err(e) => {
-            let err_msg_str = e.to_string();
-            let err_msg = err_msg_str.as_bytes();
-
-            let write_len = (err_msg.len() as u64).min(err_buf_len);
-            unsafe {
-                std::ptr::copy_nonoverlapping(err_msg.as_ptr(), err_buf, write_len as usize);
-            }
-            write_len
-        }
-    }
-}
+// # Safety
+// We assume the err_buf is valid for writes of at least err_buf_len bytes.
+// TODO: go-algorand tests
+// #[unsafe(no_mangle)]
+// pub unsafe extern "C" fn test_avm_run_program(err_buf: *mut u8, err_buf_len: u64) -> u64 {
+// }
 
 #[cfg(test)]
 mod tests {
     use std::{
         collections::HashMap,
+        path::PathBuf,
         sync::{LazyLock, Mutex},
     };
 
     use std::time::Instant;
 
-    use wamrtime::program::{self, Program};
+    use wamrtime::{
+        compiler::Compiler,
+        program::{self},
+    };
 
     use super::*;
 
@@ -359,54 +300,38 @@ mod tests {
             rust_impl_set_global_bytes,
             rust_impl_avm_get_global_var_uint,
         );
-        let runtime = RUNTIME.deref();
 
         let wasm_path = PathBuf::from(wasm_file);
-        let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-        let mut err_buf = vec![0i8; wamrtime::ERROR_BUFFER_SIZE];
-        let compiler = Compiler::new(runtime);
 
-        let comp_start = Instant::now();
-        let mut aot_bytes = compiler
-            .compile_wasm(&mut wasm_bytes, &mut err_buf)
-            .expect("should be able to compile wasm");
-        let comp_duration = comp_start.elapsed();
-        println!("Compilation took {:?}", comp_duration);
+        let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
 
-        let mut evaluator = Evaluator::new(runtime);
+        let instrumented_bytes = Compiler::new()
+            .compile_wasm(&mut wasm_bytes.clone())
+            .expect("Failed to compile WASM");
 
-        let aot_bytes_vec = vec![aot_bytes.clone(); 64];
-
-        evaluator
-            .next_round(aot_bytes_vec.clone())
-            .expect("Initial round failed");
-
-        let rnd_start = Instant::now();
-        evaluator
-            .next_round(aot_bytes_vec.clone())
-            .expect("Second round failed");
-        let rnd_duration = rnd_start.elapsed();
+        let err_buf = &mut [0i8; 512];
 
         let mut times = Vec::new();
-        for i in 0..aot_bytes_vec.len() {
+
+        for _ in 0..1000 {
+            let mut cloned_bytes = instrumented_bytes.clone();
             let start = Instant::now();
-            evaluator.call_program(i).expect("Program call failed");
+            let program = program::Program::new(cloned_bytes.as_mut_slice(), err_buf, 128 * 1024)
+                .expect("Failed to create program from WASM");
+            let _ = program.call().expect("Program call failed");
             let duration = start.elapsed();
             times.push(duration);
+            unsafe {
+                GAS_USED = 0;
+            }
         }
 
-        println!("64 programs prepared in {:?}", rnd_duration);
         let avg = times.iter().sum::<std::time::Duration>() / (times.len() as u32);
         println!("Average execution time: {:?}", avg);
         let min = times.iter().min().unwrap();
         println!("Minimum execution time: {:?}", min);
         let max = times.iter().max().unwrap();
         println!("Maximum execution time: {:?}", max);
-
-        let program = Program::new(aot_bytes.as_mut_slice(), &mut err_buf, 1024 * 128)
-            .expect("should be able to create program");
-
-        program.call();
 
         println!("All iterations completed successfully.");
     }

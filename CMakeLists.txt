@@ -46,16 +46,19 @@ if (NOT CMAKE_BUILD_TYPE)
 endif ()
 
 set (WAMR_BUILD_INTERP 1)
-set (WAMR_BUILD_AOT 1)
+set (WAMR_BUILD_FAST_INTERP 1)
+
+# AoT compilation is too slow
+set (WAMR_BUILD_AOT 0)
+
+# JiT makes initialization too slow 
 set (WAMR_BUILD_JIT 0)
+
 set (WAMR_BUILD_LIBC_BUILTIN 1)
-
 set (WAMR_BUILD_LIBC_WASI 0)
-
 set (WAMR_DISABLE_STACK_HW_BOUND_CHECK 0)
 set (WAMR_DISABLE_HW_BOUND_CHECK 0)
-
-# TODO: determine best stack limit/guard size
+set (WAMR_BUILD_REF_TYPES 1)
 
 if (NOT MSVC)
   # linker flags
@@ -84,15 +87,11 @@ else()
   message(FATAL_ERROR "LLVM not found!")
 endif()
 
-set (WAMR_BUILD_WAMR_COMPILER 1)
-add_definitions(-DWASM_ENABLE_WAMR_COMPILER=1)
-
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 
 set (SHARED_DIR ${WAMR_ROOT_DIR}/core/shared)
 set (IWASM_DIR ${WAMR_ROOT_DIR}/core/iwasm)
 
-include (${IWASM_DIR}/compilation/iwasm_compl.cmake)
 
 add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE} ${IWASM_COMPL_SOURCE})
 

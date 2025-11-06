@@ -4,7 +4,6 @@ pub mod wamr {
 }
 
 pub mod compiler;
-pub mod evaluator;
 pub mod program;
 pub mod runtime;
 mod unsafe_wamr_fns;
@@ -24,7 +23,4 @@ const MAX_WAMR_PROGRAM_REFERENCES: usize = 256;
 /// The total runtime heap size needed to support all WAMR possible programs
 const RUNTIME_HEAP_SIZE: usize = MAX_PROGRAM_SIZE * MAX_WAMR_PROGRAM_REFERENCES;
 
-/// Since everything is AoT, we don't use the WASM stack
-/// See https://bytecodealliance.github.io/wamr.dev/blog/understand-the-wamr-stacks/
-/// NOTE: PR to support this upstream is here: https://github.com/bytecodealliance/wasm-micro-runtime/pull/4688
-const STACK_SIZE: u32 = 0;
+const STACK_SIZE: u32 = 64 * KB as u32;
