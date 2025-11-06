@@ -162,8 +162,6 @@ pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
     }
 }
 
-// Functions exposed for testing purposes
-
 /// # Safety
 /// We assume the exec_env and msg_ptr are valid pointers.
 #[unsafe(no_mangle)]
@@ -177,12 +175,36 @@ pub unsafe extern "C" fn avm_set_exception(
     }
 }
 
-// # Safety
-// We assume the err_buf is valid for writes of at least err_buf_len bytes.
-// TODO: go-algorand tests
-// #[unsafe(no_mangle)]
-// pub unsafe extern "C" fn test_avm_run_program(err_buf: *mut u8, err_buf_len: u64) -> u64 {
-// }
+// Functions exposed for testing purposes
+
+static TEST_MODULE_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    let raw_wasm_bytes = include_bytes!(
+        "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/state_loop.wasm"
+    );
+
+    let compiler = wamrtime::compiler::Compiler::new(RUNTIME.deref());
+    compiler
+        .compile_wasm(&mut raw_wasm_bytes.clone())
+        .expect("should be able to compile test module")
+});
+
+pub extern "C" fn test_avm_instrument_wasm() {
+    let _ = TEST_MODULE_BYTES.deref();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn test_avm_run_program(err_buf: *mut u8, err_buf_len: u64) -> u64 {
+    let mut bytes = TEST_MODULE_BYTES.clone();
+    let program = wamrtime::program::Program::new(
+        bytes.as_mut_slice(),
+        unsafe { std::slice::from_raw_parts_mut(err_buf as *mut i8, err_buf_len as usize) },
+        128 * 1024,
+        RUNTIME.deref(),
+    )
+    .expect("should be able to create program from test module");
+
+    program.call().expect("program call should succeed")
+}
 
 #[cfg(test)]
 mod tests {
@@ -306,7 +328,7 @@ mod tests {
         let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
 
         let inst_start = Instant::now();
-        let instrumented_bytes = Compiler::new()
+        let instrumented_bytes = Compiler::new(RUNTIME.deref())
             .compile_wasm(&mut wasm_bytes.clone())
             .expect("Failed to compile WASM");
         let inst_duration = inst_start.elapsed();
