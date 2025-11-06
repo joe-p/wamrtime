@@ -349,4 +349,11 @@ mod tests {
             "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_complex.wasm",
         );
     }
+
+    #[test]
+    fn test_avm_fibo() {
+        run_wasm_test(
+            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/fibo.wasm",
+        );
+    }
 }
