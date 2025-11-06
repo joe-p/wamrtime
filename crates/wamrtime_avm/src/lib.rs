@@ -256,6 +256,8 @@ mod tests {
 
     use std::time::Instant;
 
+    use wamrtime::program::{self, Program};
+
     use super::*;
 
     #[unsafe(no_mangle)]
@@ -363,29 +365,48 @@ mod tests {
         let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
         let mut err_buf = vec![0i8; wamrtime::ERROR_BUFFER_SIZE];
         let compiler = Compiler::new(runtime);
-        let aot_bytes = compiler
+
+        let comp_start = Instant::now();
+        let mut aot_bytes = compiler
             .compile_wasm(&mut wasm_bytes, &mut err_buf)
             .expect("should be able to compile wasm");
+        let comp_duration = comp_start.elapsed();
+        println!("Compilation took {:?}", comp_duration);
 
         let mut evaluator = Evaluator::new(runtime);
 
-        let aot_bytes_vec = vec![aot_bytes.clone(); 10];
+        let aot_bytes_vec = vec![aot_bytes.clone(); 64];
 
         evaluator
             .next_round(aot_bytes_vec.clone())
             .expect("Initial round failed");
 
+        let rnd_start = Instant::now();
         evaluator
             .next_round(aot_bytes_vec.clone())
             .expect("Second round failed");
+        let rnd_duration = rnd_start.elapsed();
 
+        let mut times = Vec::new();
         for i in 0..aot_bytes_vec.len() {
-            println!("\nIteration {}:", i + 1);
             let start = Instant::now();
             evaluator.call_program(i).expect("Program call failed");
             let duration = start.elapsed();
-            println!("Iteration {} executed in {} ns", i + 1, duration.as_nanos());
+            times.push(duration);
         }
+
+        println!("64 programs prepared in {:?}", rnd_duration);
+        let avg = times.iter().sum::<std::time::Duration>() / (times.len() as u32);
+        println!("Average execution time: {:?}", avg);
+        let min = times.iter().min().unwrap();
+        println!("Minimum execution time: {:?}", min);
+        let max = times.iter().max().unwrap();
+        println!("Maximum execution time: {:?}", max);
+
+        let program = Program::new(aot_bytes.as_mut_slice(), &mut err_buf, 1024 * 128)
+            .expect("should be able to create program");
+
+        program.call();
 
         println!("All iterations completed successfully.");
     }

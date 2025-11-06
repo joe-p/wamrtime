@@ -39,6 +39,7 @@ impl<'runtime> Compiler<'runtime> {
 
         err_buf.fill(0);
 
+        let inst_start = std::time::Instant::now();
         let backend = host_function::Injector::new("env", "host_gas_check");
 
         let mut module = ModuleInfo::new(raw_wasm_bytes)
@@ -46,6 +47,13 @@ impl<'runtime> Compiler<'runtime> {
 
         let mut wasm_bytes = inject(&mut module, backend, &ConstantCostRules::new(1, 10_000, 1))
             .map_err(|err| eyre!("Failed to inject gas metering: {err}"))?;
+        let inst_duration = inst_start.elapsed();
+        println!(
+            "WASM instrumentation took {:?} ({} bytes -> {} bytes)",
+            inst_duration,
+            raw_wasm_bytes.len(),
+            wasm_bytes.len()
+        );
 
         let arch = c"aarch64";
 
