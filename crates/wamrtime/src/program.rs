@@ -1,19 +1,21 @@
+use crate::runtime::WamrRuntime;
 use crate::unsafe_wamr_fns;
 use crate::wamr;
 use crate::{ERROR_BUFFER_SIZE, Result, STACK_SIZE};
 use color_eyre::eyre::{ensure, eyre};
 use std::convert::TryFrom;
-pub struct Program {
+pub struct Program<'runtime> {
     module: *mut wamr::WASMModuleCommon,
     instance: *mut wamr::WASMModuleInstanceCommon,
     exec_env: *mut wamr::WASMExecEnv,
     program_func: wamr::wasm_function_inst_t,
+    _runtime: &'runtime crate::runtime::WamrRuntime,
 }
 
-unsafe impl Send for Program {}
-unsafe impl Sync for Program {}
+unsafe impl Send for Program<'_> {}
+unsafe impl Sync for Program<'_> {}
 
-impl Drop for Program {
+impl Drop for Program<'_> {
     fn drop(&mut self) {
         unsafe_wamr_fns::wasm_runtime_destroy_exec_env(self.exec_env);
         unsafe_wamr_fns::wasm_runtime_deinstantiate(self.instance);
@@ -21,8 +23,13 @@ impl Drop for Program {
     }
 }
 
-impl Program {
-    pub fn new(prog_bytes: &mut [u8], err_buf: &mut [i8], app_heap_size: usize) -> Result<Self> {
+impl<'runtime> Program<'runtime> {
+    pub fn new(
+        prog_bytes: &mut [u8],
+        err_buf: &mut [i8],
+        app_heap_size: usize,
+        runtime: &'runtime WamrRuntime,
+    ) -> Result<Self> {
         ensure!(
             err_buf.len() >= ERROR_BUFFER_SIZE,
             "Error buffer must be at least {ERROR_BUFFER_SIZE} bytes"
@@ -111,6 +118,7 @@ impl Program {
             instance,
             exec_env,
             program_func,
+            _runtime: runtime,
         })
     }
 

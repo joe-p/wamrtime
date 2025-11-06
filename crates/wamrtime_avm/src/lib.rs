@@ -319,8 +319,13 @@ mod tests {
         for _ in 0..1000 {
             let mut cloned_bytes = instrumented_bytes.clone();
             let start = Instant::now();
-            let program = program::Program::new(cloned_bytes.as_mut_slice(), err_buf, 128 * 1024)
-                .expect("Failed to create program from WASM");
+            let program = program::Program::new(
+                cloned_bytes.as_mut_slice(),
+                err_buf,
+                128 * 1024,
+                RUNTIME.deref(),
+            )
+            .expect("Failed to create program from WASM");
             let _ = program.call().expect("Program call failed");
             let duration = start.elapsed();
             times.push(duration);
