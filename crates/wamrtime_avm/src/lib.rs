@@ -359,4 +359,18 @@ mod tests {
             "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/fibo.wasm",
         );
     }
+
+    #[test]
+    fn test_avm_ret_1() {
+        run_wasm_test(
+            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/ret_1.wasm",
+        );
+    }
+
+    #[test]
+    fn test_avm_state_loop() {
+        run_wasm_test(
+            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/state_loop.wasm",
+        );
+    }
 }

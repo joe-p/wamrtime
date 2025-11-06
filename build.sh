@@ -30,7 +30,7 @@ for dir in wasm_crates/*/; do
     (cd "$dir" && cargo build --profile wasm_small --target wasm32-unknown-unknown)
 done
 
-cargo build --workspace --exclude avm_complex --exclude avm_blank_key
+cargo build --workspace --exclude avm_complex --exclude avm_blank_key --exclude state_loop
 
 cargo run -p wamrtime-avm-bindgen -- /Users/joe/git/algorand/go-algorand/wamrtime/crates/wamrtime_avm/src/lib.rs /Users/joe/git/algorand/go-algorand/data/transactions/logic/eval.go
  
