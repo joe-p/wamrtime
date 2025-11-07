@@ -9,17 +9,19 @@ use crate::{
 
 pub struct RuntimeChannel {
     pub program_sender: crossbeam_channel::Sender<Vec<u8>>,
+    pub result_receiver: crossbeam_channel::Receiver<u64>,
 }
 
 impl RuntimeChannel {
     pub fn new(gas_check_fn: HostGasCheckFn, host_fns: Vec<WamrHostFunction>) -> Self {
-        let (sender, receiver) = bounded::<Vec<u8>>(1);
+        let (prog_sender, prog_receiver) = bounded::<Vec<u8>>(1);
+        let (result_sender, result_receiver) = bounded::<u64>(1);
 
         thread::spawn(move || {
             let runtime = WamrRuntime::new(gas_check_fn, host_fns.clone())
                 .expect("Failed to create WamrRuntime");
 
-            while let Ok(program_bytes) = receiver.recv() {
+            while let Ok(program_bytes) = prog_receiver.recv() {
                 let err_buf = &mut [0i8; crate::ERROR_BUFFER_SIZE];
                 let program = Program::new(
                     &mut program_bytes.clone(),
@@ -36,11 +38,15 @@ impl RuntimeChannel {
                     panic!("Error buffer not empty: {}", err_msg);
                 }
 
-                program.call().expect("Failed to call program");
+                let result = program.call().expect("Failed to call program");
+                result_sender
+                    .send(result)
+                    .expect("Failed to send program result");
             }
         });
         Self {
-            program_sender: sender,
+            program_sender: prog_sender,
+            result_receiver,
         }
     }
 }

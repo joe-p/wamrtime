@@ -346,6 +346,11 @@ mod tests {
                 .send(cloned_bytes)
                 .expect("Failed to send program to runtime channel");
 
+            let _ = runtime_channel
+                .result_receiver
+                .recv()
+                .expect("Failed to receive result from runtime channel");
+
             let duration = start.elapsed();
             times.push(duration);
             unsafe {
