@@ -1,7 +1,7 @@
 use crate::runtime::WamrRuntime;
 use crate::unsafe_wamr_fns;
 use crate::wamr;
-use crate::{ERROR_BUFFER_SIZE, Result, STACK_SIZE};
+use crate::{ERROR_BUFFER_SIZE, Result};
 use color_eyre::eyre::{ensure, eyre};
 use std::convert::TryFrom;
 pub struct Program<'runtime> {
@@ -26,6 +26,7 @@ impl<'runtime> Program<'runtime> {
         err_buf: &mut [i8],
         app_heap_size: usize,
         runtime: &'runtime WamrRuntime,
+        stack_size: u32,
     ) -> Result<Self> {
         ensure!(
             err_buf.len() >= ERROR_BUFFER_SIZE,
@@ -73,7 +74,7 @@ impl<'runtime> Program<'runtime> {
         }
 
         let inst_args = wamr::InstantiationArgs {
-            default_stack_size: STACK_SIZE,
+            default_stack_size: stack_size,
             host_managed_heap_size: app_heap_size,
             max_memory_pages: max_pages,
         };
@@ -93,7 +94,7 @@ impl<'runtime> Program<'runtime> {
             return Err(eyre!("Failed to instantiate WASM module: {}", err_msg));
         }
 
-        let exec_env = unsafe_wamr_fns::wasm_runtime_create_exec_env(instance, STACK_SIZE);
+        let exec_env = unsafe_wamr_fns::wasm_runtime_create_exec_env(instance, stack_size);
         if exec_env.is_null() {
             unsafe_wamr_fns::wasm_runtime_deinstantiate(instance);
             unsafe_wamr_fns::wasm_runtime_unload(module);

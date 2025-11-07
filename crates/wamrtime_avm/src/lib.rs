@@ -7,12 +7,25 @@ use wamrtime::{
     runtime_thread::RuntimeThread,
 };
 
+const KB: usize = 1024;
+const MAX_PROGRAM_SIZE: usize = 8 * KB;
+const MAX_PROGRAM_DEPTH: usize = 256;
+const RUNTIME_HEAP_SIZE: usize = MAX_PROGRAM_SIZE * MAX_PROGRAM_DEPTH;
+
+// TODO: figure out a reasonable stack size
+const STACK_SIZE: u32 = 64 * KB as u32;
+
+const MANAGED_HEAP_SIZE: usize = 64 * KB;
+
 static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
 
 static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
     RuntimeThread::new(
         host_gas_check_impl,
         AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
+        RUNTIME_HEAP_SIZE,
+        STACK_SIZE,
+        MANAGED_HEAP_SIZE,
     )
 });
 

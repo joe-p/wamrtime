@@ -1,5 +1,5 @@
 use crate::unsafe_wamr_fns;
-use crate::{RUNTIME_HEAP_SIZE, Result, wamr};
+use crate::{Result, wamr};
 use color_eyre::eyre::{Context, eyre};
 use std::ffi::c_void;
 use std::fmt::Display;
@@ -102,6 +102,7 @@ impl WamrRuntime {
     pub fn new(
         host_gas_check_fn: HostGasCheckFn,
         host_functions: Vec<WamrHostFunction>,
+        runtime_heap_size: usize,
     ) -> Result<Self> {
         let mut c_strings: Vec<std::ffi::CString> = vec![];
         let mut native_symbols: Vec<wamr::NativeSymbol> =
@@ -155,7 +156,7 @@ impl WamrRuntime {
 
         let runtime = WamrRuntime {
             native_symbols,
-            heap: vec![0u8; RUNTIME_HEAP_SIZE],
+            heap: vec![0u8; runtime_heap_size],
             _c_strings: c_strings,
         };
 
@@ -165,7 +166,7 @@ impl WamrRuntime {
             mem_alloc_option: wamr::MemAllocOption {
                 pool: wamr::MemAllocOption__bindgen_ty_1 {
                     heap_buf: runtime.heap.as_ptr() as *mut c_void,
-                    heap_size: RUNTIME_HEAP_SIZE as u32,
+                    heap_size: runtime_heap_size as u32,
                 },
             },
             ..Default::default()

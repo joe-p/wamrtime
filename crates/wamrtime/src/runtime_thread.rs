@@ -13,12 +13,18 @@ pub struct RuntimeThread {
 }
 
 impl RuntimeThread {
-    pub fn new(gas_check_fn: HostGasCheckFn, host_fns: Vec<WamrHostFunction>) -> Self {
+    pub fn new(
+        gas_check_fn: HostGasCheckFn,
+        host_fns: Vec<WamrHostFunction>,
+        runtime_heap_size: usize,
+        stack_size: u32,
+        app_heap_size: usize,
+    ) -> Self {
         let (prog_sender, prog_receiver) = bounded::<Vec<u8>>(1);
         let (result_sender, result_receiver) = bounded::<u64>(1);
 
         thread::spawn(move || {
-            let runtime = WamrRuntime::new(gas_check_fn, host_fns.clone())
+            let runtime = WamrRuntime::new(gas_check_fn, host_fns.clone(), runtime_heap_size)
                 .expect("Failed to create WamrRuntime");
 
             while let Ok(program_bytes) = prog_receiver.recv() {
@@ -26,8 +32,9 @@ impl RuntimeThread {
                 let program = Program::new(
                     &mut program_bytes.clone(),
                     err_buf,
-                    crate::STACK_SIZE as usize,
+                    app_heap_size,
                     &runtime,
+                    stack_size,
                 )
                 .expect("Failed to create Program");
 
