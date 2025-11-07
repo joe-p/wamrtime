@@ -7,12 +7,12 @@ use crate::{
     runtime::{HostGasCheckFn, WamrHostFunction, WamrRuntime},
 };
 
-pub struct RuntimeChannel {
+pub struct RuntimeThread {
     pub program_sender: crossbeam_channel::Sender<Vec<u8>>,
     pub result_receiver: crossbeam_channel::Receiver<u64>,
 }
 
-impl RuntimeChannel {
+impl RuntimeThread {
     pub fn new(gas_check_fn: HostGasCheckFn, host_fns: Vec<WamrHostFunction>) -> Self {
         let (prog_sender, prog_receiver) = bounded::<Vec<u8>>(1);
         let (result_sender, result_receiver) = bounded::<u64>(1);

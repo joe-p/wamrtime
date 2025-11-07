@@ -216,7 +216,7 @@ mod tests {
 
     use std::time::Instant;
 
-    use wamrtime::{compiler::Compiler, runtime_channel::RuntimeChannel};
+    use wamrtime::{compiler::Compiler, runtime_thread::RuntimeThread};
 
     use super::*;
 
@@ -324,7 +324,7 @@ mod tests {
 
         let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
 
-        let runtime_channel = RuntimeChannel::new(
+        let runtime_channel = RuntimeThread::new(
             host_gas_check_impl,
             AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
         );
