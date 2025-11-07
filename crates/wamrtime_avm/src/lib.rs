@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::sync::LazyLock;
 
 use wamrtime::{
-    runtime::{WamrHostFunction, WamrRuntime, WamrType},
+    runtime::{WamrHostFunction, WamrType},
     runtime_thread::RuntimeThread,
 };
 
@@ -156,14 +156,6 @@ pub extern "C" fn host_gas_check_impl(_exec_env: *mut c_void, requested_gas: i64
     }
 }
 
-static RUNTIME: LazyLock<WamrRuntime> = LazyLock::new(|| {
-    WamrRuntime::new(
-        host_gas_check_impl,
-        AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
-    )
-    .expect("should be able to create AVM WAMR runtime")
-});
-
 #[unsafe(no_mangle)]
 pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
     unsafe {
@@ -203,17 +195,9 @@ pub extern "C" fn test_avm_instrument_wasm() {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn test_avm_run_program(err_buf: *mut u8, err_buf_len: u64) -> u64 {
-    let mut bytes = TEST_MODULE_BYTES.clone();
-    let program = wamrtime::program::Program::new(
-        bytes.as_mut_slice(),
-        unsafe { std::slice::from_raw_parts_mut(err_buf as *mut i8, err_buf_len as usize) },
-        128 * 1024,
-        RUNTIME.deref(),
-    )
-    .expect("should be able to create program from test module");
-
-    program.call().expect("program call should succeed")
+pub extern "C" fn test_avm_run_program() -> u64 {
+    let bytes = TEST_MODULE_BYTES.clone();
+    AVM_RUNTIME_THREAD.call_program(bytes)
 }
 
 #[cfg(test)]
