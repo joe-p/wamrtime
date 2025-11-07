@@ -13,11 +13,6 @@ pub struct WamrRuntime {
     _c_strings: Vec<std::ffi::CString>,
 }
 
-/// Safety: We are ensuring that we can use WamrRuntime in LazyLock
-/// Maybe in the future we use use once_cell::unsync::Lazy?
-unsafe impl Sync for WamrRuntime {}
-unsafe impl Send for WamrRuntime {}
-
 impl Drop for WamrRuntime {
     fn drop(&mut self) {
         unsafe_wamr_fns::wasm_runtime_destroy();
@@ -67,6 +62,8 @@ pub struct WamrHostFunction {
     return_type: Option<WamrType>,
 }
 
+// Safety: WamrHostFunction is not thread safe out of the box because it contains a raw pointer.
+// This pointer, however, is expected to be a pointer to a function which is safe to call from multiple threads.
 unsafe impl Send for WamrHostFunction {}
 unsafe impl Sync for WamrHostFunction {}
 

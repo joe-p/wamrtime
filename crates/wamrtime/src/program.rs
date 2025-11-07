@@ -12,9 +12,6 @@ pub struct Program<'runtime> {
     _runtime: &'runtime crate::runtime::WamrRuntime,
 }
 
-unsafe impl Send for Program<'_> {}
-unsafe impl Sync for Program<'_> {}
-
 impl Drop for Program<'_> {
     fn drop(&mut self) {
         unsafe_wamr_fns::wasm_runtime_destroy_exec_env(self.exec_env);
