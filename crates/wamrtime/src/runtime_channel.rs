@@ -49,4 +49,13 @@ impl RuntimeChannel {
             result_receiver,
         }
     }
+
+    pub fn call_program(&self, program_bytes: Vec<u8>) -> u64 {
+        self.program_sender
+            .send(program_bytes)
+            .expect("Failed to send program bytes");
+        self.result_receiver
+            .recv()
+            .expect("Failed to receive program result")
+    }
 }

@@ -341,15 +341,7 @@ mod tests {
         for _ in 0..1000 {
             let cloned_bytes = instrumented_bytes.clone();
             let start = Instant::now();
-            runtime_channel
-                .program_sender
-                .send(cloned_bytes)
-                .expect("Failed to send program to runtime channel");
-
-            let _ = runtime_channel
-                .result_receiver
-                .recv()
-                .expect("Failed to receive result from runtime channel");
+            runtime_channel.call_program(cloned_bytes);
 
             let duration = start.elapsed();
             times.push(duration);
