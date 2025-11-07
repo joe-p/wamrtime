@@ -188,6 +188,7 @@ static TEST_MODULE_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
         .expect("should be able to compile test module")
 });
 
+#[unsafe(no_mangle)]
 pub extern "C" fn test_avm_instrument_wasm() {
     let _ = TEST_MODULE_BYTES.deref();
 }
