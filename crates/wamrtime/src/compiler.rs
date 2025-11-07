@@ -6,16 +6,20 @@ use radix_wasm_instrument::{
     utils::module_info::ModuleInfo,
 };
 
-pub struct Compiler<'runtime> {
+pub struct Compiler {
     rules: ConstantCostRules,
-    _runtime: &'runtime crate::runtime::WamrRuntime,
 }
 
-impl<'runtime> Compiler<'runtime> {
-    pub fn new(runtime: &'runtime crate::runtime::WamrRuntime) -> Self {
+impl Default for Compiler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Compiler {
+    pub fn new() -> Self {
         Self {
             rules: ConstantCostRules::new(1, 10_000, 1),
-            _runtime: runtime,
         }
     }
 

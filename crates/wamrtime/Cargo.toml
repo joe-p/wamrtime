@@ -8,6 +8,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 color-eyre = "0.6"
+crossbeam-channel = "0.5.15"
 radix-wasm-instrument = { git = "https://github.com/radixdlt/wasm-instrument/", version = "1.0.0" }
 
 [build-dependencies]

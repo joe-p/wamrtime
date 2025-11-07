@@ -46,7 +46,6 @@ macro_rules! avm_host_functions {
                     $(
                         [<$fn_name:snake:upper _IMPL>] = Some([<$fn_name _impl>]);
                     )*
-                    let _ = RUNTIME.deref();
                 }
             }
         }
@@ -182,7 +181,7 @@ static TEST_MODULE_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
         "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/state_loop.wasm"
     );
 
-    let compiler = wamrtime::compiler::Compiler::new(RUNTIME.deref());
+    let compiler = wamrtime::compiler::Compiler::new();
     compiler
         .compile_wasm(&mut raw_wasm_bytes.clone())
         .expect("should be able to compile test module")
@@ -217,10 +216,7 @@ mod tests {
 
     use std::time::Instant;
 
-    use wamrtime::{
-        compiler::Compiler,
-        program::{self},
-    };
+    use wamrtime::{compiler::Compiler, runtime_channel::RuntimeChannel};
 
     use super::*;
 
@@ -328,28 +324,28 @@ mod tests {
 
         let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
 
+        let runtime_channel = RuntimeChannel::new(
+            host_gas_check_impl,
+            AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
+        );
+
         let inst_start = Instant::now();
-        let instrumented_bytes = Compiler::new(RUNTIME.deref())
+        let instrumented_bytes = Compiler::new()
             .compile_wasm(&mut wasm_bytes.clone())
             .expect("Failed to compile WASM");
         let inst_duration = inst_start.elapsed();
         println!("Instrumentation time: {:?}", inst_duration);
 
-        let err_buf = &mut [0i8; 512];
-
         let mut times = Vec::new();
 
         for _ in 0..1000 {
-            let mut cloned_bytes = instrumented_bytes.clone();
+            let cloned_bytes = instrumented_bytes.clone();
             let start = Instant::now();
-            let program = program::Program::new(
-                cloned_bytes.as_mut_slice(),
-                err_buf,
-                128 * 1024,
-                RUNTIME.deref(),
-            )
-            .expect("Failed to create program from WASM");
-            let _ = program.call().expect("Program call failed");
+            runtime_channel
+                .program_sender
+                .send(cloned_bytes)
+                .expect("Failed to send program to runtime channel");
+
             let duration = start.elapsed();
             times.push(duration);
             unsafe {

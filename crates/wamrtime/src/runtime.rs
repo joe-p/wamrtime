@@ -24,7 +24,7 @@ impl Drop for WamrRuntime {
     }
 }
 
-type HostGasCheckFn = unsafe extern "C" fn(exec_env: *mut c_void, requested_gas: i64);
+pub type HostGasCheckFn = unsafe extern "C" fn(exec_env: *mut c_void, requested_gas: i64);
 
 extern "C" fn host_malloc(exec_env: *mut c_void, size: u64) -> u64 {
     let module_inst =
@@ -40,6 +40,7 @@ extern "C" fn host_free(exec_env: *mut c_void, ptr: u64) {
     unsafe_wamr_fns::wasm_runtime_module_free(module_inst, ptr);
 }
 
+#[derive(Clone)]
 pub enum WamrType {
     I64,
     I32,
@@ -58,12 +59,16 @@ impl Display for WamrType {
     }
 }
 
+#[derive(Clone)]
 pub struct WamrHostFunction {
     name: String,
     function: *mut c_void,
     args: Option<Vec<WamrType>>,
     return_type: Option<WamrType>,
 }
+
+unsafe impl Send for WamrHostFunction {}
+unsafe impl Sync for WamrHostFunction {}
 
 impl WamrHostFunction {
     pub fn new(
