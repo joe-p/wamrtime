@@ -2,9 +2,19 @@ use std::ffi::c_void;
 use std::ops::Deref;
 use std::sync::LazyLock;
 
-use wamrtime::runtime::{WamrHostFunction, WamrRuntime, WamrType};
+use wamrtime::{
+    runtime::{WamrHostFunction, WamrRuntime, WamrType},
+    runtime_thread::RuntimeThread,
+};
 
 static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
+
+static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
+    RuntimeThread::new(
+        host_gas_check_impl,
+        AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
+    )
+});
 
 macro_rules! avm_host_functions {
     (
@@ -40,9 +50,9 @@ macro_rules! avm_host_functions {
             pub extern "C" fn avm_init(
                 $([<$fn_name _impl>]: [<$fn_name:camel Fn>]),*
             ) {
+                let _ = AVM_RUNTIME_THREAD.deref();
+
                 unsafe {
-                    // TODO: Eventually should actually only get called once when creating the
-                    // block evaluator
                     $(
                         [<$fn_name:snake:upper _IMPL>] = Some([<$fn_name _impl>]);
                     )*
@@ -216,7 +226,7 @@ mod tests {
 
     use std::time::Instant;
 
-    use wamrtime::{compiler::Compiler, runtime_thread::RuntimeThread};
+    use wamrtime::compiler::Compiler;
 
     use super::*;
 
@@ -324,11 +334,6 @@ mod tests {
 
         let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
 
-        let runtime_channel = RuntimeThread::new(
-            host_gas_check_impl,
-            AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
-        );
-
         let inst_start = Instant::now();
         let instrumented_bytes = Compiler::new()
             .compile_wasm(&mut wasm_bytes.clone())
@@ -341,7 +346,7 @@ mod tests {
         for _ in 0..1000 {
             let cloned_bytes = instrumented_bytes.clone();
             let start = Instant::now();
-            runtime_channel.call_program(cloned_bytes);
+            AVM_RUNTIME_THREAD.call_program(cloned_bytes);
 
             let duration = start.elapsed();
             times.push(duration);
