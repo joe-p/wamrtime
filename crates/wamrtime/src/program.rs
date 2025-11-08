@@ -1,17 +1,18 @@
+use crate::runtime::WamrRuntime;
 use crate::unsafe_wamr_fns;
 use crate::wamr;
 use crate::{ERROR_BUFFER_SIZE, Result};
 use color_eyre::eyre::{ensure, eyre};
 use std::convert::TryFrom;
-
-pub struct Program {
+pub struct Program<'runtime> {
     module: *mut wamr::WASMModuleCommon,
     instance: *mut wamr::WASMModuleInstanceCommon,
     exec_env: *mut wamr::WASMExecEnv,
     program_func: wamr::wasm_function_inst_t,
+    _runtime: &'runtime crate::runtime::WamrRuntime,
 }
 
-impl Drop for Program {
+impl Drop for Program<'_> {
     fn drop(&mut self) {
         unsafe_wamr_fns::wasm_runtime_destroy_exec_env(self.exec_env);
         unsafe_wamr_fns::wasm_runtime_deinstantiate(self.instance);
@@ -19,15 +20,12 @@ impl Drop for Program {
     }
 }
 
-// Safety: Program can be sent between threads as long as long as it ultimately gets ran in its
-// original runtime thread.
-unsafe impl Send for Program {}
-
-impl Program {
+impl<'runtime> Program<'runtime> {
     pub fn new(
         prog_bytes: &mut [u8],
         err_buf: &mut [i8],
         app_heap_size: usize,
+        runtime: &'runtime WamrRuntime,
         stack_size: u32,
         mut max_pages: u32,
     ) -> Result<Self> {
@@ -117,6 +115,7 @@ impl Program {
             instance,
             exec_env,
             program_func,
+            _runtime: runtime,
         })
     }
 
