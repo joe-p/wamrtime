@@ -25,7 +25,8 @@ const MANAGED_HEAP_SIZE: usize = 128 * KB;
 /// The total possible memory size is (MAX_MODULE_PAGES * 64KB) + MANAGED_HEAP_SIZE.
 const MAX_MODULE_PAGES: u32 = 2;
 
-static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
+/// A pointer to a Go handle that contains a *EvalContext
+static mut AVM_EVAL_CTX: *mut c_void = core::ptr::null_mut();
 
 static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
     RuntimeThread::new(
@@ -61,7 +62,7 @@ macro_rules! avm_host_functions {
                     let impl_fn = unsafe {
                         [<$fn_name:snake:upper _IMPL>].expect(concat!("AVM ", stringify!($fn_name), " not set"))
                     };
-                    let ctx = unsafe { AVM_CTX };
+                    let ctx = unsafe { AVM_EVAL_CTX };
                     unsafe { impl_fn(exec_env, ctx, $($arg_name),*) }
                 }
             }
@@ -181,7 +182,7 @@ pub extern "C" fn host_gas_check_impl(_exec_env: *mut c_void, requested_gas: i64
 #[unsafe(no_mangle)]
 pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
     unsafe {
-        AVM_CTX = ctx;
+        AVM_EVAL_CTX = ctx;
     }
 }
 
