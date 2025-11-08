@@ -62,10 +62,9 @@ pub struct WamrHostFunction {
     return_type: Option<WamrType>,
 }
 
-// Safety: WamrHostFunction is not thread safe out of the box because it contains a raw pointer.
+// Safety: WamrHostFunction is not Send out of the box because it contains a raw pointer.
 // This pointer, however, is expected to be a pointer to a function which is safe to call from multiple threads.
 unsafe impl Send for WamrHostFunction {}
-unsafe impl Sync for WamrHostFunction {}
 
 impl WamrHostFunction {
     pub fn new(
