@@ -19,6 +19,7 @@ impl RuntimeThread {
         runtime_heap_size: usize,
         stack_size: u32,
         app_heap_size: usize,
+        max_pages: u32,
     ) -> Self {
         let (prog_sender, prog_receiver) = bounded::<Vec<u8>>(1);
         let (result_sender, result_receiver) = bounded::<u64>(1);
@@ -35,6 +36,7 @@ impl RuntimeThread {
                     app_heap_size,
                     &runtime,
                     stack_size,
+                    max_pages,
                 )
                 .expect("Failed to create Program");
 

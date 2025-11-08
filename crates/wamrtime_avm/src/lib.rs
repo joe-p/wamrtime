@@ -10,12 +10,20 @@ use wamrtime::{
 const KB: usize = 1024;
 const MAX_PROGRAM_SIZE: usize = 8 * KB;
 const MAX_PROGRAM_DEPTH: usize = 256;
-const RUNTIME_HEAP_SIZE: usize = MAX_PROGRAM_SIZE * MAX_PROGRAM_DEPTH;
 
-// TODO: figure out a reasonable stack size
-const STACK_SIZE: u32 = 64 * KB as u32;
+/// The size of the heap that the RUNTIME will use. This is separate from the module's linear
+/// memory and is used for things like instantiated programs.
+const RUNTIME_HEAP_SIZE: usize = (MAX_PROGRAM_SIZE + 1) * MAX_PROGRAM_DEPTH;
 
-const MANAGED_HEAP_SIZE: usize = 64 * KB;
+/// The WASM execution stack size. Note that most languages will use their own stack within linear memory.
+const STACK_SIZE: u32 = 16 * KB as u32;
+
+/// The managed heap is ADDED to the linear memory of the WASM module before defined __heap_base.
+const MANAGED_HEAP_SIZE: usize = 128 * KB;
+
+/// The maximum number of memory pages (64KB each) that a module can have. This is BEFORE adding the managed heap.
+/// The total possible memory size is (MAX_MODULE_PAGES * 64KB) + MANAGED_HEAP_SIZE.
+const MAX_MODULE_PAGES: u32 = 2;
 
 static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
 
@@ -26,6 +34,7 @@ static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
         RUNTIME_HEAP_SIZE,
         STACK_SIZE,
         MANAGED_HEAP_SIZE,
+        MAX_MODULE_PAGES,
     )
 });
 

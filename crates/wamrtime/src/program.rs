@@ -27,6 +27,7 @@ impl<'runtime> Program<'runtime> {
         app_heap_size: usize,
         runtime: &'runtime WamrRuntime,
         stack_size: u32,
+        mut max_pages: u32,
     ) -> Result<Self> {
         ensure!(
             err_buf.len() >= ERROR_BUFFER_SIZE,
@@ -54,8 +55,6 @@ impl<'runtime> Program<'runtime> {
                 .into_owned();
             return Err(eyre!("Failed to load WASM module: {}", err_msg));
         }
-
-        let mut max_pages = app_heap_size / (64 * 1024);
 
         let export_count = unsafe_wamr_fns::wasm_runtime_get_export_count(module);
         for i in 0..export_count {
