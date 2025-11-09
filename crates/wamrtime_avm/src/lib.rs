@@ -36,6 +36,9 @@ static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
         STACK_SIZE,
         MANAGED_HEAP_SIZE,
         MAX_MODULE_PAGES,
+        // Each program has two messages (init, call). It's unlikely we will ever need the full
+        // buffer, but we allocate this to avoid blocking sends.
+        MAX_PROGRAM_DEPTH * 2,
     )
 });
 

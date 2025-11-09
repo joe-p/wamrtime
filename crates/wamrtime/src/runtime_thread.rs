@@ -30,11 +30,9 @@ impl RuntimeThread {
         stack_size: u32,
         app_heap_size: usize,
         max_pages: u32,
+        message_buffer_size: usize,
     ) -> Self {
-        // We bound it with 512 because we can have 256 programs total, with each program having
-        // two messages (init and call). It is unlikely we'll ever get close to this limit, but it
-        // seems preferable to an unbounded channel.
-        let (prog_sender, prog_receiver) = bounded::<ProgramMessage>(512);
+        let (prog_sender, prog_receiver) = bounded::<ProgramMessage>(message_buffer_size);
 
         thread::spawn(move || {
             let _runtime = WamrRuntime::new(gas_check_fn, host_fns, runtime_heap_size)
