@@ -11,6 +11,9 @@ pub struct Program {
     program_func: wamr::wasm_function_inst_t,
 }
 
+unsafe impl Sync for Program {}
+unsafe impl Send for Program {}
+
 impl Drop for Program {
     fn drop(&mut self) {
         unsafe_wamr_fns::wasm_runtime_destroy_exec_env(self.exec_env);
@@ -18,10 +21,6 @@ impl Drop for Program {
         unsafe_wamr_fns::wasm_runtime_unload(self.module);
     }
 }
-
-// Safety: Program can be sent between threads as long as long as it ultimately gets ran in its
-// original runtime thread.
-unsafe impl Send for Program {}
 
 impl Program {
     pub fn new(

@@ -13,6 +13,9 @@ pub struct WamrRuntime {
     _c_strings: Vec<std::ffi::CString>,
 }
 
+unsafe impl Send for WamrRuntime {}
+unsafe impl Sync for WamrRuntime {}
+
 impl Drop for WamrRuntime {
     fn drop(&mut self) {
         unsafe_wamr_fns::wasm_runtime_destroy();
