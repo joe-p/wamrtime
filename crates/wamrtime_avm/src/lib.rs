@@ -166,13 +166,14 @@ const AVM_FUNCTIONS: &[AvmFunction] = &[
     },
 ];
 
-const GAS_LIMIT: i64 = 1_000_000;
+const GAS_LIMIT: i64 = i64::MAX;
 static mut GAS_USED: i64 = 0;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn host_gas_check_impl(_exec_env: *mut c_void, requested_gas: i64) {
     unsafe {
         GAS_USED += requested_gas;
+        #[allow(clippy::absurd_extreme_comparisons)]
         if GAS_USED > GAS_LIMIT {
             panic!("Out of gas");
         }
@@ -203,7 +204,7 @@ pub unsafe extern "C" fn avm_set_exception(
 
 static TEST_MODULE_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
     let raw_wasm_bytes = include_bytes!(
-        "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/state_loop.wasm"
+        "/Users/joe/git/algorand/go-algorand/wamrtime/target/wasm32-unknown-unknown/wasm_small/fibo.wasm"
     );
 
     let compiler = wamrtime::compiler::Compiler::new();
