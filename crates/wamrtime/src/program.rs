@@ -128,6 +128,12 @@ impl<'runtime> Program<'runtime> {
             ..Default::default()
         }];
 
+        unsafe {
+            if !wamr::wasm_runtime_init_thread_env() {
+                return Err(eyre!("Failed to initialize WAMR thread environment"));
+            }
+        };
+
         if !unsafe_wamr_fns::wasm_runtime_call_wasm_a(
             self.exec_env,
             self.program_func,
