@@ -37,8 +37,9 @@ impl RuntimeThread {
         let (prog_sender, prog_receiver) = bounded::<ProgramMessage>(512);
 
         thread::spawn(move || {
-            let _runtime = WamrRuntime::new(gas_check_fn, host_fns.clone(), runtime_heap_size)
+            let _runtime = WamrRuntime::new(gas_check_fn, host_fns, runtime_heap_size)
                 .expect("Failed to create WamrRuntime");
+            let err_buf = &mut [0i8; crate::ERROR_BUFFER_SIZE];
 
             while let Ok(program_message) = prog_receiver.recv() {
                 match program_message {
@@ -46,7 +47,6 @@ impl RuntimeThread {
                         mut program_bytes,
                         program_sender,
                     } => {
-                        let err_buf = &mut [0i8; crate::ERROR_BUFFER_SIZE];
                         let result = match Program::new(
                             &mut program_bytes,
                             err_buf,
@@ -60,6 +60,7 @@ impl RuntimeThread {
                                         unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
                                             .to_string_lossy()
                                             .into_owned();
+                                    err_buf.fill(0);
                                     Err(format!("Error buffer not empty: {}", err_msg))
                                 } else {
                                     Ok(program)
