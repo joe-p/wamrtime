@@ -10,11 +10,11 @@ use crate::{
 pub enum ProgramMessage {
     NewProgram {
         program_bytes: Vec<u8>,
-        program_sender: Sender<Program>,
+        program_sender: Sender<Result<Program, String>>,
     },
     CallProgram {
-        program_receiver: Receiver<Program>,
-        result_sender: Sender<u64>,
+        program_receiver: Receiver<Result<Program, String>>,
+        result_sender: Sender<Result<u64, String>>,
     },
 }
 
@@ -43,43 +43,52 @@ impl RuntimeThread {
             while let Ok(program_message) = prog_receiver.recv() {
                 match program_message {
                     ProgramMessage::NewProgram {
-                        program_bytes,
+                        mut program_bytes,
                         program_sender,
                     } => {
                         let err_buf = &mut [0i8; crate::ERROR_BUFFER_SIZE];
-                        let program = Program::new(
-                            &mut program_bytes.clone(),
+                        let result = match Program::new(
+                            &mut program_bytes,
                             err_buf,
                             app_heap_size,
                             stack_size,
                             max_pages,
-                        )
-                        .expect("Failed to create Program");
+                        ) {
+                            Ok(program) => {
+                                if err_buf[0] != 0 {
+                                    let err_msg =
+                                        unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
+                                            .to_string_lossy()
+                                            .into_owned();
+                                    Err(format!("Error buffer not empty: {}", err_msg))
+                                } else {
+                                    Ok(program)
+                                }
+                            }
+                            Err(e) => Err(format!("Failed to create Program: {}", e)),
+                        };
 
-                        if err_buf[0] != 0 {
-                            let err_msg = unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
-                                .to_string_lossy()
-                                .into_owned();
-                            panic!("Error buffer not empty: {}", err_msg);
+                        if program_sender.send(result).is_err() {
+                            // Receiver dropped, nothing we can do
+                            break;
                         }
-
-                        program_sender
-                            .send(program)
-                            .expect("Failed to send initialized program");
                     }
                     ProgramMessage::CallProgram {
                         program_receiver,
                         result_sender,
                     } => {
-                        let program = program_receiver
-                            .recv()
-                            .expect("Failed to receive program for calling");
+                        let result = match program_receiver.recv() {
+                            Ok(Ok(program)) => program
+                                .call()
+                                .map_err(|e| format!("Failed to call program: {}", e)),
+                            Ok(Err(e)) => Err(e),
+                            Err(e) => Err(format!("Failed to receive program for calling: {}", e)),
+                        };
 
-                        let result = program.call().expect("Failed to call program");
-
-                        result_sender
-                            .send(result)
-                            .expect("Failed to send program result");
+                        if result_sender.send(result).is_err() {
+                            // Receiver dropped, nothing we can do
+                            break;
+                        }
                     }
                 }
             }
@@ -90,36 +99,42 @@ impl RuntimeThread {
         }
     }
 
-    pub fn init_program(&self, program_bytes: Vec<u8>) -> Receiver<Program> {
-        let (sender, receiver) = crossbeam_channel::bounded::<Program>(1);
+    pub fn init_program(
+        &self,
+        program_bytes: Vec<u8>,
+    ) -> Result<Receiver<Result<Program, String>>, String> {
+        let (sender, receiver) = crossbeam_channel::bounded::<Result<Program, String>>(1);
 
         self.program_message_sender
             .send(ProgramMessage::NewProgram {
                 program_bytes,
                 program_sender: sender,
             })
-            .expect("Failed to send program bytes");
+            .map_err(|e| format!("Failed to send program bytes: {}", e))?;
 
-        receiver
+        Ok(receiver)
     }
 
-    pub fn call_intialized_program(&self, program_receiver: Receiver<Program>) -> u64 {
-        let (result_sender, result_receiver) = bounded::<u64>(1);
+    pub fn call_intialized_program(
+        &self,
+        program_receiver: Receiver<Result<Program, String>>,
+    ) -> Result<u64, String> {
+        let (result_sender, result_receiver) = bounded::<Result<u64, String>>(1);
 
         self.program_message_sender
             .send(ProgramMessage::CallProgram {
                 program_receiver,
                 result_sender,
             })
-            .expect("Failed to send call program message");
+            .map_err(|e| format!("Failed to send call program message: {}", e))?;
 
         result_receiver
             .recv()
-            .expect("Failed to receive program result")
+            .map_err(|e| format!("Failed to receive program result: {}", e))?
     }
 
-    pub fn call_program(&self, program_bytes: Vec<u8>) -> u64 {
-        let program_receiver = self.init_program(program_bytes);
+    pub fn call_program(&self, program_bytes: Vec<u8>) -> Result<u64, String> {
+        let program_receiver = self.init_program(program_bytes)?;
         self.call_intialized_program(program_receiver)
     }
 }
