@@ -341,20 +341,18 @@ mod tests {
 
         let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
 
-        let inst_start = Instant::now();
-        let instrumented_bytes = Compiler::new()
-            .compile_wasm(&mut wasm_bytes.clone())
-            .expect("Failed to compile WASM");
-        let inst_duration = inst_start.elapsed();
-        println!("Instrumentation time: {:?}", inst_duration);
-
         let mut times = Vec::new();
 
-        for _ in 0..1000 {
-            let cloned_bytes = instrumented_bytes.clone();
-            let start = Instant::now();
-            AVM_RUNTIME_THREAD.call_program(cloned_bytes);
+        let mut prog_recvs = Vec::new();
 
+        for _ in 0..256 {
+            let cloned_bytes = wasm_bytes.clone();
+            prog_recvs.push(AVM_RUNTIME_THREAD.init_program(cloned_bytes));
+        }
+
+        for recv in prog_recvs {
+            let start = Instant::now();
+            AVM_RUNTIME_THREAD.call_intialized_program(recv);
             let duration = start.elapsed();
             times.push(duration);
             unsafe {
