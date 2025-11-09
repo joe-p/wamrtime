@@ -6,7 +6,6 @@ pub mod wamr {
 pub mod compiler;
 pub mod program;
 pub mod runtime;
-pub mod runtime_thread;
 mod unsafe_wamr_fns;
 
 pub type Result<T> = color_eyre::Result<T>;

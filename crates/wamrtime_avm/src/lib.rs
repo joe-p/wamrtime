@@ -3,8 +3,8 @@ use std::ops::Deref;
 use std::sync::LazyLock;
 
 use wamrtime::{
-    runtime::{WamrHostFunction, WamrType},
-    runtime_thread::RuntimeThread,
+    program::Program,
+    runtime::{WamrHostFunction, WamrRuntime, WamrType},
 };
 
 const KB: usize = 1024;
@@ -28,15 +28,13 @@ const MAX_MODULE_PAGES: u32 = 2;
 /// A pointer to a Go handle that contains a *EvalContext
 static mut AVM_EVAL_CTX: *mut c_void = core::ptr::null_mut();
 
-static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
-    RuntimeThread::new(
+static AVM_RUNTIME: LazyLock<WamrRuntime> = LazyLock::new(|| {
+    WamrRuntime::new(
         host_gas_check_impl,
         AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
         RUNTIME_HEAP_SIZE,
-        STACK_SIZE,
-        MANAGED_HEAP_SIZE,
-        MAX_MODULE_PAGES,
     )
+    .expect("Failed to create AVM WamrRuntime")
 });
 
 macro_rules! avm_host_functions {
@@ -73,7 +71,7 @@ macro_rules! avm_host_functions {
             pub extern "C" fn avm_init(
                 $([<$fn_name _impl>]: [<$fn_name:camel Fn>]),*
             ) {
-                let _ = AVM_RUNTIME_THREAD.deref();
+                let _ = AVM_RUNTIME.deref();
 
                 unsafe {
                     $(
@@ -219,8 +217,20 @@ pub extern "C" fn test_avm_instrument_wasm() {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn test_avm_run_program() -> u64 {
-    let bytes = TEST_MODULE_BYTES.clone();
-    AVM_RUNTIME_THREAD.call_program(bytes)
+    let mut bytes = TEST_MODULE_BYTES.clone();
+    let err_buf_len = 256;
+    let mut err_buf = vec![0i8; err_buf_len];
+    Program::new(
+        &mut bytes,
+        &mut err_buf,
+        MANAGED_HEAP_SIZE,
+        &AVM_RUNTIME,
+        STACK_SIZE,
+        MAX_MODULE_PAGES,
+    )
+    .expect("should be able to create program")
+    .call()
+    .expect("should be able to run program")
 }
 
 #[cfg(test)]
@@ -351,10 +361,22 @@ mod tests {
         let mut times = Vec::new();
 
         for _ in 0..1000 {
-            let cloned_bytes = instrumented_bytes.clone();
+            let mut cloned_bytes = instrumented_bytes.clone();
             let start = Instant::now();
-            AVM_RUNTIME_THREAD.call_program(cloned_bytes);
 
+            let err_buf_len = 256;
+            let mut err_buf = vec![0i8; err_buf_len];
+            Program::new(
+                &mut cloned_bytes,
+                &mut err_buf,
+                MANAGED_HEAP_SIZE,
+                &AVM_RUNTIME,
+                STACK_SIZE,
+                MAX_MODULE_PAGES,
+            )
+            .expect("should be able to create program")
+            .call()
+            .expect("should be able to run program");
             let duration = start.elapsed();
             times.push(duration);
             unsafe {
