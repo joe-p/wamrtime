@@ -288,7 +288,7 @@ mod tests {
         _app: u64,
         key_ptr: *const u8,
         key_len: u32,
-        dest_ptr: *mut u8,
+        dst_ptr: *mut u8,
         dest_len: u32,
     ) -> i32 {
         let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
@@ -298,7 +298,7 @@ mod tests {
                 return -1;
             }
             unsafe {
-                std::ptr::copy_nonoverlapping(value.as_ptr(), dest_ptr, value.len());
+                std::ptr::copy_nonoverlapping(value.as_ptr(), dst_ptr, value.len());
             }
             value.len() as i32
         } else {
@@ -357,10 +357,10 @@ mod tests {
         let mut times = Vec::new();
 
         for _ in 0..1000 {
-            let cloned_bytes = instrumented_bytes.clone();
+            let program_bytes = instrumented_bytes.clone();
             let start = Instant::now();
             AVM_RUNTIME_THREAD
-                .call_program(cloned_bytes)
+                .call_program(program_bytes)
                 .expect("Failed to run program");
 
             let duration = start.elapsed();

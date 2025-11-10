@@ -25,48 +25,48 @@ unsafe impl Send for Program {}
 
 impl Program {
     pub fn new(
-        prog_bytes: &mut [u8],
-        err_buf: &mut [i8],
+        program_bytes: &mut [u8],
+        error_buf: &mut [i8],
         app_heap_size: usize,
         stack_size: u32,
         mut max_pages: u32,
     ) -> Result<Self> {
         ensure!(
-            err_buf.len() >= ERROR_BUFFER_SIZE,
+            error_buf.len() >= ERROR_BUFFER_SIZE,
             "Error buffer must be at least {ERROR_BUFFER_SIZE} bytes"
         );
-        err_buf.fill(0);
+        error_buf.fill(0);
 
         let prog_len =
-            u32::try_from(prog_bytes.len()).map_err(|_| eyre!("AOT length exceeds u32::MAX"))?;
-        let err_buf_len = u32::try_from(ERROR_BUFFER_SIZE)
+            u32::try_from(program_bytes.len()).map_err(|_| eyre!("AOT length exceeds u32::MAX"))?;
+        let error_buf_size = u32::try_from(ERROR_BUFFER_SIZE)
             .map_err(|_| eyre!("ERROR_BUFFER_SIZE exceeds u32::MAX"))?;
         let app_heap_size =
             u32::try_from(app_heap_size).map_err(|_| eyre!("App heap size exceeds u32::MAX"))?;
 
         let module = unsafe_wamr_fns::wasm_runtime_load(
-            prog_bytes.as_mut_ptr(),
+            program_bytes.as_mut_ptr(),
             prog_len,
-            err_buf.as_mut_ptr(),
-            err_buf_len,
+            error_buf.as_mut_ptr(),
+            error_buf_size,
         );
 
         if module.is_null() {
-            let err_msg = unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
+            let err_msg = unsafe { std::ffi::CStr::from_ptr(error_buf.as_ptr()) }
                 .to_string_lossy()
                 .into_owned();
             return Err(eyre!("Failed to load WASM module: {}", err_msg));
         }
 
         let export_count = unsafe_wamr_fns::wasm_runtime_get_export_count(module);
-        for i in 0..export_count {
-            let mut export_info: wamr::wasm_export_t = Default::default();
-            unsafe_wamr_fns::wasm_runtime_get_export_type(module, i, &mut export_info);
+        for export_index in 0..export_count {
+            let mut export_type: wamr::wasm_export_t = Default::default();
+            unsafe_wamr_fns::wasm_runtime_get_export_type(module, export_index, &mut export_type);
 
-            if export_info.kind == wamr::wasm_import_export_kind_t_WASM_IMPORT_EXPORT_KIND_MEMORY {
+            if export_type.kind == wamr::wasm_import_export_kind_t_WASM_IMPORT_EXPORT_KIND_MEMORY {
                 max_pages = core::cmp::min(
                     unsafe_wamr_fns::wasm_memory_type_get_max_page_count(unsafe {
-                        export_info.u.memory_type
+                        export_type.u.memory_type
                     }),
                     max_pages,
                 );
@@ -83,13 +83,13 @@ impl Program {
         let instance = unsafe_wamr_fns::wasm_runtime_instantiate_ex(
             module,
             &inst_args,
-            err_buf.as_mut_ptr(),
-            err_buf_len,
+            error_buf.as_mut_ptr(),
+            error_buf_size,
         );
 
         if instance.is_null() {
             unsafe_wamr_fns::wasm_runtime_unload(module);
-            let err_msg = unsafe { std::ffi::CStr::from_ptr(err_buf.as_ptr()) }
+            let err_msg = unsafe { std::ffi::CStr::from_ptr(error_buf.as_ptr()) }
                 .to_string_lossy()
                 .into_owned();
             return Err(eyre!("Failed to instantiate WASM module: {}", err_msg));
@@ -123,7 +123,7 @@ impl Program {
     pub fn call(&self) -> Result<u64> {
         let kind = u8::try_from(wamr::wasm_valkind_enum_WASM_I64)
             .map_err(|_| eyre!("WASM value kind does not fit in u8"))?;
-        let mut call_results = [wamr::wasm_val_t {
+        let mut results = [wamr::wasm_val_t {
             kind,
             of: wamr::wasm_val_t__bindgen_ty_1 { i64_: 0 },
             ..Default::default()
@@ -133,7 +133,7 @@ impl Program {
             self.exec_env,
             self.program_func,
             1,
-            call_results.as_mut_ptr(),
+            results.as_mut_ptr(),
             0,
             std::ptr::null_mut(),
         ) {
@@ -149,6 +149,6 @@ impl Program {
             return Err(eyre!("WASM function call failed: {}", msg));
         }
 
-        Ok(unsafe_wamr_fns::wasm_val_t_get_i64(&call_results[0]) as u64)
+        Ok(unsafe_wamr_fns::wasm_val_t_get_i64(&results[0]) as u64)
     }
 }
