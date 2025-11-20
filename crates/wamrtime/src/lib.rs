@@ -3,7 +3,6 @@ pub mod wamr {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-pub mod compiler;
 pub mod program;
 pub mod runtime;
 pub mod runtime_thread;

@@ -1,6 +1,6 @@
-use std::ffi::c_void;
 use std::ops::Deref;
 use std::sync::LazyLock;
+use std::{ffi::c_void, path::PathBuf};
 
 use wamrtime::{
     runtime::{WamrHostFunction, WamrType},
@@ -206,14 +206,10 @@ pub unsafe extern "C" fn avm_set_exception(
 // Functions exposed for testing purposes
 
 static TEST_MODULE_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    let raw_wasm_bytes = include_bytes!(
-        "/Users/joe/git/algorand/go-algorand/wamrtime/target/wasm32-unknown-unknown/wasm_small/fibo.wasm"
-    );
+    let dir = env!("CARGO_MANIFEST_DIR");
 
-    let compiler = wamrtime::compiler::Compiler::new();
-    compiler
-        .compile_wasm(&mut raw_wasm_bytes.clone())
-        .expect("should be able to compile test module")
+    std::fs::read(PathBuf::from(dir).join("target/wasm32-unknown-unknown/wasm_small/fibo.wasm"))
+        .expect("Failed to read WASM file")
 });
 
 #[unsafe(no_mangle)]
@@ -238,8 +234,6 @@ mod tests {
     };
 
     use std::time::Instant;
-
-    use wamrtime::compiler::Compiler;
 
     use super::*;
 
@@ -347,17 +341,10 @@ mod tests {
 
         let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
 
-        let inst_start = Instant::now();
-        let instrumented_bytes = Compiler::new()
-            .compile_wasm(&mut wasm_bytes.clone())
-            .expect("Failed to compile WASM");
-        let inst_duration = inst_start.elapsed();
-        println!("Instrumentation time: {:?}", inst_duration);
-
         let mut times = Vec::new();
 
         for _ in 0..1000 {
-            let program_bytes = instrumented_bytes.clone();
+            let program_bytes = wasm_bytes.clone();
             let start = Instant::now();
             AVM_RUNTIME_THREAD
                 .call_program(program_bytes)

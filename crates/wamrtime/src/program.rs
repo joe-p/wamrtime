@@ -102,6 +102,10 @@ impl Program {
             return Err(eyre!("Failed to create execution environment"));
         }
 
+        unsafe {
+            wamr::wasm_runtime_set_instruction_count_limit(exec_env, 10_000_000);
+        }
+
         let program_func =
             unsafe_wamr_fns::wasm_runtime_lookup_function(instance, c"program".as_ptr());
 
