@@ -30,6 +30,7 @@ impl Program {
         app_heap_size: usize,
         stack_size: u32,
         mut max_pages: u32,
+        instruction_count_limit: i32,
     ) -> Result<Self> {
         ensure!(
             error_buf.len() >= ERROR_BUFFER_SIZE,
@@ -103,7 +104,7 @@ impl Program {
         }
 
         unsafe {
-            wamr::wasm_runtime_set_instruction_count_limit(exec_env, 10_000_000);
+            wamr::wasm_runtime_set_instruction_count_limit(exec_env, instruction_count_limit);
         }
 
         let program_func =

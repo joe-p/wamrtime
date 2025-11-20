@@ -28,6 +28,8 @@ const MAX_MODULE_PAGES: u32 = 2;
 /// A pointer to a Go handle that contains a *EvalContext
 static mut AVM_EVAL_CTX: *mut c_void = core::ptr::null_mut();
 
+const INSTRUCTION_COUNT_LIMIT: i32 = 10_000_000;
+
 static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
     RuntimeThread::new(
         host_gas_check_impl,
@@ -39,6 +41,7 @@ static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
         // Each program has two messages (init, call). It's unlikely we will ever need the full
         // buffer, but we allocate this to avoid blocking sends.
         MAX_PROGRAM_DEPTH * 2,
+        INSTRUCTION_COUNT_LIMIT,
     )
 });
 

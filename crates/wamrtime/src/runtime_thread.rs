@@ -23,6 +23,7 @@ pub struct RuntimeThread {
 }
 
 impl RuntimeThread {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         gas_check_fn: HostGasCheckFn,
         host_functions: Vec<WamrHostFunction>,
@@ -31,6 +32,7 @@ impl RuntimeThread {
         app_heap_size: usize,
         max_pages: u32,
         message_buffer_size: usize,
+        instruction_count_limit: i32,
     ) -> Self {
         let (prog_sender, prog_receiver) = bounded::<ProgramMessage>(message_buffer_size);
 
@@ -51,6 +53,7 @@ impl RuntimeThread {
                             app_heap_size,
                             stack_size,
                             max_pages,
+                            instruction_count_limit,
                         ) {
                             Ok(program) => {
                                 if error_buf[0] != 0 {
