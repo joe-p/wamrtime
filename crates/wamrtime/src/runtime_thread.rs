@@ -8,8 +8,10 @@ use crate::{
     runtime::{WamrHostFunction, WamrRuntime},
 };
 
+/// Initialization and Call are two different messages. There is no need for a single message that
+/// does both because the WASM initialization time makes the channel overhead insignificant.
 pub enum ProgramMessage {
-    NewProgram {
+    InitializeProgram {
         program_bytes: Vec<u8>,
         program_sender: Sender<Result<Program, String>>,
     },
@@ -38,7 +40,7 @@ impl RuntimeThread {
 
             while let Ok(program_message) = prog_receiver.recv() {
                 match program_message {
-                    ProgramMessage::NewProgram {
+                    ProgramMessage::InitializeProgram {
                         mut program_bytes,
                         program_sender,
                     } => {
@@ -96,7 +98,7 @@ impl RuntimeThread {
         let (sender, receiver) = crossbeam_channel::bounded::<Result<Program, String>>(1);
 
         self.program_message_sender
-            .send(ProgramMessage::NewProgram {
+            .send(ProgramMessage::InitializeProgram {
                 program_bytes,
                 program_sender: sender,
             })
