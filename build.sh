@@ -16,13 +16,6 @@ cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make vmlib
 
-cd ${WAMR_DIR}/wamr-compiler
-bash build_llvm.sh
-mkdir -p build
-cd build
-cmake .. -DWAMR_BUILD_PLATFORM=darwin
-make
-
 cd ${ROOT}
 
 # for each directory in wasm_crates, build the wasm module

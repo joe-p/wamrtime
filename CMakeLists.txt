@@ -77,17 +77,6 @@ endif ()
 # build out vmlib
 set (WAMR_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/wasm-micro-runtime)
 
-set (LLVM_SRC_ROOT "${WAMR_ROOT_DIR}/core/deps/llvm")
-if (EXISTS "${LLVM_SRC_ROOT}/build")
-  set (CMAKE_PREFIX_PATH "${LLVM_SRC_ROOT}/build;${CMAKE_PREFIX_PATH}")
-  find_package(LLVM REQUIRED CONFIG)
-  include_directories(${LLVM_INCLUDE_DIRS})
-  add_definitions(${LLVM_DEFINITIONS})
-  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-else()
-  message(FATAL_ERROR "LLVM not found!")
-endif()
-
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 
 set (SHARED_DIR ${WAMR_ROOT_DIR}/core/shared)
@@ -99,14 +88,9 @@ add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE} ${IWASM_COMPL_SOURCE})
 target_include_directories(vmlib PUBLIC 
     ${IWASM_DIR}/include
     ${SHARED_DIR}/include
-    ${LLVM_INCLUDE_DIRS}
 )
 
 check_pie_supported()
 
-if (LLVM_LINK_LLVM_DYLIB)
-  target_link_libraries(vmlib LLVM)
-else()
-  target_link_libraries(vmlib ${LLVM_AVAILABLE_LIBS})
-endif()
+target_link_libraries(vmlib)
 
