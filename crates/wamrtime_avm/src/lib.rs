@@ -198,9 +198,15 @@ pub unsafe extern "C" fn avm_set_exception(
 
 static TEST_MODULE_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
     let dir = env!("CARGO_MANIFEST_DIR");
+    let wasm_path = PathBuf::from(dir)
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("target/wasm32-unknown-unknown/wasm_small/ret_1.wasm");
 
-    std::fs::read(PathBuf::from(dir).join("target/wasm32-unknown-unknown/wasm_small/fibo.wasm"))
-        .expect("Failed to read WASM file")
+    std::fs::read(&wasm_path)
+        .unwrap_or_else(|_| panic!("Failed to read WASM file: {}", wasm_path.display()))
 });
 
 #[unsafe(no_mangle)]
