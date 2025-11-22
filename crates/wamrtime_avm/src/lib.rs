@@ -2,6 +2,8 @@ use std::ops::Deref;
 use std::sync::LazyLock;
 use std::{ffi::c_void, path::PathBuf};
 
+use wamrtime::ERROR_BUFFER_SIZE;
+use wamrtime::program::ProgramConfig;
 use wamrtime::{
     runtime::{WamrHostFunction, WamrType},
     runtime_thread::RuntimeThread,
@@ -31,16 +33,17 @@ static mut AVM_EVAL_CTX: *mut c_void = core::ptr::null_mut();
 const INSTRUCTION_COUNT_LIMIT: i32 = 10_000_000;
 
 static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
+    let program_config = ProgramConfig {
+        error_buf: [0i8; ERROR_BUFFER_SIZE],
+        stack_size: STACK_SIZE,
+        app_heap_size: MANAGED_HEAP_SIZE,
+        max_pages: MAX_MODULE_PAGES,
+        instruction_count_limit: INSTRUCTION_COUNT_LIMIT,
+    };
     RuntimeThread::new(
         AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
         RUNTIME_HEAP_SIZE,
-        STACK_SIZE,
-        MANAGED_HEAP_SIZE,
-        MAX_MODULE_PAGES,
-        // Each program has two messages (init, call). It's unlikely we will ever need the full
-        // buffer, but we allocate this to avoid blocking sends.
-        MAX_PROGRAM_DEPTH * 2,
-        INSTRUCTION_COUNT_LIMIT,
+        program_config,
     )
 });
 

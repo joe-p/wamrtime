@@ -4,6 +4,14 @@ use crate::{ERROR_BUFFER_SIZE, Result};
 use color_eyre::eyre::{ensure, eyre};
 use std::convert::TryFrom;
 
+pub struct ProgramConfig {
+    pub error_buf: [i8; ERROR_BUFFER_SIZE],
+    pub stack_size: u32,
+    pub app_heap_size: usize,
+    pub max_pages: u32,
+    pub instruction_count_limit: i32,
+}
+
 pub struct Program {
     module: *mut wamr::WASMModuleCommon,
     instance: *mut wamr::WASMModuleInstanceCommon,
@@ -24,14 +32,15 @@ impl Drop for Program {
 unsafe impl Send for Program {}
 
 impl Program {
-    pub fn new(
-        program_bytes: &mut [u8],
-        error_buf: &mut [i8],
-        app_heap_size: usize,
-        stack_size: u32,
-        mut max_pages: u32,
-        instruction_count_limit: i32,
-    ) -> Result<Self> {
+    pub fn new(program_bytes: &mut [u8], program_config: &mut ProgramConfig) -> Result<Self> {
+        let ProgramConfig {
+            error_buf,
+            stack_size,
+            app_heap_size,
+            max_pages,
+            instruction_count_limit,
+        } = program_config;
+
         ensure!(
             error_buf.len() >= ERROR_BUFFER_SIZE,
             "Error buffer must be at least {ERROR_BUFFER_SIZE} bytes"
@@ -43,7 +52,7 @@ impl Program {
         let error_buf_size = u32::try_from(ERROR_BUFFER_SIZE)
             .map_err(|_| eyre!("ERROR_BUFFER_SIZE exceeds u32::MAX"))?;
         let app_heap_size =
-            u32::try_from(app_heap_size).map_err(|_| eyre!("App heap size exceeds u32::MAX"))?;
+            u32::try_from(*app_heap_size).map_err(|_| eyre!("App heap size exceeds u32::MAX"))?;
 
         let module = unsafe_wamr_fns::wasm_runtime_load(
             program_bytes.as_mut_ptr(),
@@ -65,20 +74,20 @@ impl Program {
             unsafe_wamr_fns::wasm_runtime_get_export_type(module, export_index, &mut export_type);
 
             if export_type.kind == wamr::wasm_import_export_kind_t_WASM_IMPORT_EXPORT_KIND_MEMORY {
-                max_pages = core::cmp::min(
+                *max_pages = core::cmp::min(
                     unsafe_wamr_fns::wasm_memory_type_get_max_page_count(unsafe {
                         export_type.u.memory_type
                     }),
-                    max_pages,
+                    *max_pages,
                 );
                 break;
             }
         }
 
         let inst_args = wamr::InstantiationArgs {
-            default_stack_size: stack_size,
+            default_stack_size: *stack_size,
             host_managed_heap_size: app_heap_size,
-            max_memory_pages: max_pages,
+            max_memory_pages: *max_pages,
         };
 
         let instance = unsafe_wamr_fns::wasm_runtime_instantiate_ex(
@@ -96,7 +105,7 @@ impl Program {
             return Err(eyre!("Failed to instantiate WASM module: {}", err_msg));
         }
 
-        let exec_env = unsafe_wamr_fns::wasm_runtime_create_exec_env(instance, stack_size);
+        let exec_env = unsafe_wamr_fns::wasm_runtime_create_exec_env(instance, *stack_size);
         if exec_env.is_null() {
             unsafe_wamr_fns::wasm_runtime_deinstantiate(instance);
             unsafe_wamr_fns::wasm_runtime_unload(module);
@@ -104,7 +113,7 @@ impl Program {
         }
 
         unsafe {
-            wamr::wasm_runtime_set_instruction_count_limit(exec_env, instruction_count_limit);
+            wamr::wasm_runtime_set_instruction_count_limit(exec_env, *instruction_count_limit);
         }
 
         let program_func =

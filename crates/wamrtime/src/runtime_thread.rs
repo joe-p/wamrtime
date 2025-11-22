@@ -3,7 +3,8 @@ use std::thread;
 use crossbeam_channel::{Receiver, Sender, bounded};
 
 use crate::{
-    program::Program,
+    ERROR_BUFFER_SIZE,
+    program::{Program, ProgramConfig},
     runtime::{WamrHostFunction, WamrRuntime},
 };
 
@@ -23,17 +24,12 @@ pub struct RuntimeThread {
 }
 
 impl RuntimeThread {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         host_functions: Vec<WamrHostFunction>,
         runtime_heap_size: usize,
-        stack_size: u32,
-        app_heap_size: usize,
-        max_pages: u32,
-        message_buffer_size: usize,
-        instruction_count_limit: i32,
+        mut program_config: ProgramConfig,
     ) -> Self {
-        let (prog_sender, prog_receiver) = bounded::<ProgramMessage>(message_buffer_size);
+        let (prog_sender, prog_receiver) = bounded::<ProgramMessage>(ERROR_BUFFER_SIZE);
 
         thread::spawn(move || {
             let _runtime = WamrRuntime::new(host_functions, runtime_heap_size)
@@ -46,14 +42,7 @@ impl RuntimeThread {
                         mut program_bytes,
                         program_sender,
                     } => {
-                        let result = match Program::new(
-                            &mut program_bytes,
-                            error_buf,
-                            app_heap_size,
-                            stack_size,
-                            max_pages,
-                            instruction_count_limit,
-                        ) {
+                        let result = match Program::new(&mut program_bytes, &mut program_config) {
                             Ok(program) => {
                                 if error_buf[0] != 0 {
                                     let err_msg =
