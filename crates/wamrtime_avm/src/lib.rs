@@ -204,11 +204,6 @@ static TEST_MODULE_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
 });
 
 #[unsafe(no_mangle)]
-pub extern "C" fn test_avm_instrument_wasm() {
-    let _ = TEST_MODULE_BYTES.deref();
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn test_avm_run_program() -> u64 {
     let bytes = TEST_MODULE_BYTES.clone();
     AVM_RUNTIME_THREAD
