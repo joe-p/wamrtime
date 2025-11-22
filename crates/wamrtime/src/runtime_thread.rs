@@ -4,7 +4,7 @@ use crossbeam_channel::{Receiver, Sender, bounded};
 
 use crate::{
     program::Program,
-    runtime::{HostGasCheckFn, WamrHostFunction, WamrRuntime},
+    runtime::{WamrHostFunction, WamrRuntime},
 };
 
 pub enum ProgramMessage {
@@ -25,7 +25,6 @@ pub struct RuntimeThread {
 impl RuntimeThread {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        gas_check_fn: HostGasCheckFn,
         host_functions: Vec<WamrHostFunction>,
         runtime_heap_size: usize,
         stack_size: u32,
@@ -37,7 +36,7 @@ impl RuntimeThread {
         let (prog_sender, prog_receiver) = bounded::<ProgramMessage>(message_buffer_size);
 
         thread::spawn(move || {
-            let _runtime = WamrRuntime::new(gas_check_fn, host_functions, runtime_heap_size)
+            let _runtime = WamrRuntime::new(host_functions, runtime_heap_size)
                 .expect("Failed to create WamrRuntime");
             let error_buf = &mut [0i8; crate::ERROR_BUFFER_SIZE];
 

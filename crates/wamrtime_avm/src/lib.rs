@@ -32,7 +32,6 @@ const INSTRUCTION_COUNT_LIMIT: i32 = 10_000_000;
 
 static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
     RuntimeThread::new(
-        host_gas_check_impl,
         AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
         RUNTIME_HEAP_SIZE,
         STACK_SIZE,
@@ -171,20 +170,6 @@ const AVM_FUNCTIONS: &[AvmFunction] = &[
         host_func: avm_get_global_var_uint as *mut c_void,
     },
 ];
-
-const GAS_LIMIT: i64 = i64::MAX;
-static mut GAS_USED: i64 = 0;
-
-#[unsafe(no_mangle)]
-pub extern "C" fn host_gas_check_impl(_exec_env: *mut c_void, requested_gas: i64) {
-    unsafe {
-        GAS_USED += requested_gas;
-        #[allow(clippy::absurd_extreme_comparisons)]
-        if GAS_USED > GAS_LIMIT {
-            panic!("Out of gas");
-        }
-    }
-}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
@@ -355,9 +340,6 @@ mod tests {
 
             let duration = start.elapsed();
             times.push(duration);
-            unsafe {
-                GAS_USED = 0;
-            }
         }
 
         let avg = times.iter().sum::<std::time::Duration>() / (times.len() as u32);

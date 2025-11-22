@@ -98,11 +98,7 @@ impl WamrHostFunction {
 }
 
 impl WamrRuntime {
-    pub fn new(
-        host_gas_check_fn: HostGasCheckFn,
-        host_functions: Vec<WamrHostFunction>,
-        runtime_heap_size: usize,
-    ) -> Result<Self> {
+    pub fn new(host_functions: Vec<WamrHostFunction>, runtime_heap_size: usize) -> Result<Self> {
         let mut c_strings: Vec<std::ffi::CString> = vec![];
         let mut native_symbols: Vec<wamr::NativeSymbol> =
             Vec::with_capacity(host_functions.len() + 1);
@@ -131,13 +127,6 @@ impl WamrRuntime {
                 ..Default::default()
             });
         }
-
-        native_symbols.push(wamr::NativeSymbol {
-            symbol: c"host_gas_check".as_ptr(),
-            func_ptr: host_gas_check_fn as *mut c_void,
-            signature: c"(I)".as_ptr(),
-            ..Default::default()
-        });
 
         native_symbols.push(wamr::NativeSymbol {
             symbol: c"host_malloc".as_ptr(),
