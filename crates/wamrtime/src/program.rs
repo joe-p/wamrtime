@@ -32,6 +32,20 @@ impl Drop for Program {
 unsafe impl Send for Program {}
 
 impl Program {
+    pub fn init_and_call_in_thread(
+        program_bytes: &mut [u8],
+        program_config: &mut ProgramConfig,
+    ) -> Result<u64> {
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                let program = Self::new(program_bytes, program_config)?;
+                program.call()
+            })
+            .join()
+            .expect("should be able to join thread")
+        })
+    }
+
     pub fn new(program_bytes: &mut [u8], program_config: &mut ProgramConfig) -> Result<Self> {
         let ProgramConfig {
             error_buf,
@@ -135,6 +149,7 @@ impl Program {
     }
 
     pub fn call(&self) -> Result<u64> {
+        unsafe { wamr::wasm_runtime_init_thread_env() };
         let kind = u8::try_from(wamr::wasm_valkind_enum_WASM_I64)
             .map_err(|_| eyre!("WASM value kind does not fit in u8"))?;
         let mut results = [wamr::wasm_val_t {
@@ -162,6 +177,8 @@ impl Program {
 
             return Err(eyre!("WASM function call failed: {}", msg));
         }
+
+        unsafe { wamr::wasm_runtime_destroy_thread_env() };
 
         Ok(unsafe_wamr_fns::wasm_val_t_get_i64(&results[0]) as u64)
     }

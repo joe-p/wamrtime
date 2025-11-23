@@ -219,6 +219,8 @@ mod tests {
 
     use std::time::Instant;
 
+    use wamrtime::{program::Program, runtime::WamrRuntime};
+
     use super::*;
 
     #[unsafe(no_mangle)]
@@ -327,12 +329,26 @@ mod tests {
 
         let mut times = Vec::new();
 
+        let _runtime = WamrRuntime::new(
+            AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
+            RUNTIME_HEAP_SIZE,
+        )
+        .expect("Failed to create WamrRuntime");
+
         for _ in 0..1000 {
             let program_bytes = wasm_bytes.clone();
             let start = Instant::now();
-            AVM_RUNTIME_THREAD
-                .call_program(program_bytes)
-                .expect("Failed to run program");
+            let _ = Program::init_and_call_in_thread(
+                &mut program_bytes.clone(),
+                &mut ProgramConfig {
+                    error_buf: [0i8; ERROR_BUFFER_SIZE],
+                    stack_size: STACK_SIZE,
+                    app_heap_size: MANAGED_HEAP_SIZE,
+                    max_pages: MAX_MODULE_PAGES,
+                    instruction_count_limit: INSTRUCTION_COUNT_LIMIT,
+                },
+            )
+            .unwrap();
 
             let duration = start.elapsed();
             times.push(duration);
