@@ -34,11 +34,15 @@ static mut AVM_EVAL_CTX: *mut c_void = core::ptr::null_mut();
 const INSTRUCTION_COUNT_LIMIT: i32 = 10_000_000;
 
 static AVM_RUNTIME: LazyLock<WamrRuntime> = LazyLock::new(|| {
-    wamrtime::runtime::WamrRuntime::new(
-        AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
-        RUNTIME_HEAP_SIZE,
-    )
-    .expect("should create AVM runtime")
+    std::thread::spawn(|| {
+        wamrtime::runtime::WamrRuntime::new(
+            AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
+            RUNTIME_HEAP_SIZE,
+        )
+        .expect("should create AVM runtime")
+    })
+    .join()
+    .expect("should join AVM runtime thread")
 });
 
 macro_rules! avm_host_functions {
