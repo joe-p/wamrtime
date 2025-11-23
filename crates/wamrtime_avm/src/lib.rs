@@ -3,7 +3,8 @@ use std::sync::LazyLock;
 use std::{ffi::c_void, path::PathBuf};
 
 use wamrtime::ERROR_BUFFER_SIZE;
-use wamrtime::program::ProgramConfig;
+use wamrtime::program::{Program, ProgramConfig};
+use wamrtime::runtime::WamrRuntime;
 use wamrtime::{
     runtime::{WamrHostFunction, WamrType},
     runtime_thread::RuntimeThread,
@@ -32,19 +33,12 @@ static mut AVM_EVAL_CTX: *mut c_void = core::ptr::null_mut();
 
 const INSTRUCTION_COUNT_LIMIT: i32 = 10_000_000;
 
-static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
-    let program_config = ProgramConfig {
-        error_buf: [0i8; ERROR_BUFFER_SIZE],
-        stack_size: STACK_SIZE,
-        app_heap_size: MANAGED_HEAP_SIZE,
-        max_pages: MAX_MODULE_PAGES,
-        instruction_count_limit: INSTRUCTION_COUNT_LIMIT,
-    };
-    RuntimeThread::new(
+static AVM_RUNTIME: LazyLock<WamrRuntime> = LazyLock::new(|| {
+    wamrtime::runtime::WamrRuntime::new(
         AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
         RUNTIME_HEAP_SIZE,
-        program_config,
     )
+    .expect("should create AVM runtime")
 });
 
 macro_rules! avm_host_functions {
@@ -81,7 +75,7 @@ macro_rules! avm_host_functions {
             pub extern "C" fn avm_init(
                 $([<$fn_name _impl>]: [<$fn_name:camel Fn>]),*
             ) {
-                let _ = AVM_RUNTIME_THREAD.deref();
+                let _ = AVM_RUNTIME.deref();
 
                 unsafe {
                     $(
@@ -201,12 +195,17 @@ pub unsafe extern "C" fn avm_call_program(
     program_bytes_ptr: *const u8,
     program_bytes_len: u64,
 ) -> u64 {
-    let program_bytes =
+    let mut program_bytes =
         unsafe { std::slice::from_raw_parts(program_bytes_ptr, program_bytes_len as usize) }
             .to_vec();
-    AVM_RUNTIME_THREAD
-        .call_program(program_bytes)
-        .expect("Failed to run program")
+    let mut program_config = ProgramConfig {
+        error_buf: [0i8; ERROR_BUFFER_SIZE],
+        stack_size: STACK_SIZE,
+        max_pages: MAX_MODULE_PAGES,
+        app_heap_size: MANAGED_HEAP_SIZE,
+        instruction_count_limit: INSTRUCTION_COUNT_LIMIT,
+    };
+    Program::init_and_call_in_thread(&mut program_bytes, &mut program_config).unwrap()
 }
 
 #[cfg(test)]
@@ -218,8 +217,6 @@ mod tests {
     };
 
     use std::time::Instant;
-
-    use wamrtime::{program::Program, runtime::WamrRuntime};
 
     use super::*;
 
@@ -329,26 +326,12 @@ mod tests {
 
         let mut times = Vec::new();
 
-        let _runtime = WamrRuntime::new(
-            AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
-            RUNTIME_HEAP_SIZE,
-        )
-        .expect("Failed to create WamrRuntime");
-
         for _ in 0..1000 {
             let program_bytes = wasm_bytes.clone();
             let start = Instant::now();
-            let _ = Program::init_and_call_in_thread(
-                &mut program_bytes.clone(),
-                &mut ProgramConfig {
-                    error_buf: [0i8; ERROR_BUFFER_SIZE],
-                    stack_size: STACK_SIZE,
-                    app_heap_size: MANAGED_HEAP_SIZE,
-                    max_pages: MAX_MODULE_PAGES,
-                    instruction_count_limit: INSTRUCTION_COUNT_LIMIT,
-                },
-            )
-            .unwrap();
+            AVM_RUNTIME_THREAD
+                .call_program(program_bytes)
+                .expect("Failed to run program");
 
             let duration = start.elapsed();
             times.push(duration);
