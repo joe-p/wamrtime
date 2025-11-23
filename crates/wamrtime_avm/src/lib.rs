@@ -194,26 +194,18 @@ pub unsafe extern "C" fn avm_set_exception(
     }
 }
 
-// Functions exposed for testing purposes
-
-static TEST_MODULE_BYTES: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    let dir = env!("CARGO_MANIFEST_DIR");
-    let wasm_path = PathBuf::from(dir)
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("target/wasm32-unknown-unknown/wasm_small/ret_1.wasm");
-
-    std::fs::read(&wasm_path)
-        .unwrap_or_else(|_| panic!("Failed to read WASM file: {}", wasm_path.display()))
-});
-
+/// # Safety
+/// We assume the program_bytes_ptr is a valid pointer to program_bytes_len bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn test_avm_run_program() -> u64 {
-    let bytes = TEST_MODULE_BYTES.clone();
+pub unsafe extern "C" fn avm_call_program(
+    program_bytes_ptr: *const u8,
+    program_bytes_len: u64,
+) -> u64 {
+    let program_bytes =
+        unsafe { std::slice::from_raw_parts(program_bytes_ptr, program_bytes_len as usize) }
+            .to_vec();
     AVM_RUNTIME_THREAD
-        .call_program(bytes)
+        .call_program(program_bytes)
         .expect("Failed to run program")
 }
 
