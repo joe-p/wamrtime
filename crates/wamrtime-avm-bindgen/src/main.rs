@@ -122,11 +122,13 @@ fn rust_type_to_c(rust_type: &str) -> String {
     match rust_type {
         "u8" => "uint8_t".to_string(),
         "u16" => "uint16_t".to_string(),
-        "u32" => "uint32_t".to_string(),
-        "u64" => "uint64_t".to_string(),
+        // Use CGo-compatible types: unsigned int matches GoUint32, unsigned long long matches GoUint64
+        "u32" => "unsigned int".to_string(),
+        "u64" => "unsigned long long".to_string(),
         "i8" => "int8_t".to_string(),
         "i16" => "int16_t".to_string(),
-        "i32" => "int32_t".to_string(),
+        // Use CGo-compatible types: int matches GoInt32
+        "i32" => "int".to_string(),
         "i64" => "int64_t".to_string(),
         "*const u8" => "const uint8_t*".to_string(),
         "*mut u8" => "uint8_t*".to_string(),
