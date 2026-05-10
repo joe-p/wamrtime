@@ -4,5 +4,5 @@ fn fibo(n: u64) -> u64 {
 
 #[unsafe(export_name = "program")]
 pub extern "C" fn program() -> u64 {
-    fibo(15)
+    fibo(17)
 }
