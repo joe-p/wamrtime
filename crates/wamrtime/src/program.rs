@@ -3,9 +3,10 @@ use crate::wamr;
 use crate::{ERROR_BUFFER_SIZE, Result};
 use color_eyre::eyre::{ensure, eyre};
 use std::convert::TryFrom;
+use std::ffi::c_char;
 
 pub struct ProgramConfig {
-    pub error_buf: [i8; ERROR_BUFFER_SIZE],
+    pub error_buf: [c_char; ERROR_BUFFER_SIZE],
     pub stack_size: u32,
     pub app_heap_size: usize,
     pub max_pages: u32,

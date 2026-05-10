@@ -1,6 +1,7 @@
+use std::ffi::c_char;
+use std::ffi::c_void;
 use std::ops::Deref;
 use std::sync::LazyLock;
-use std::{ffi::c_void, path::PathBuf};
 
 use wamrtime::ERROR_BUFFER_SIZE;
 use wamrtime::program::ProgramConfig;
@@ -34,7 +35,7 @@ const INSTRUCTION_COUNT_LIMIT: i32 = 10_000_000;
 
 static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
     let program_config = ProgramConfig {
-        error_buf: [0i8; ERROR_BUFFER_SIZE],
+        error_buf: [0; ERROR_BUFFER_SIZE],
         stack_size: STACK_SIZE,
         app_heap_size: MANAGED_HEAP_SIZE,
         max_pages: MAX_MODULE_PAGES,
@@ -186,7 +187,7 @@ pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn avm_set_exception(
     exec_env: *mut wamrtime::wamr::WASMExecEnv,
-    msg_ptr: *const i8,
+    msg_ptr: *const c_char,
 ) {
     let module_inst = unsafe { wamrtime::wamr::wasm_runtime_get_module_inst(exec_env) };
     unsafe {
@@ -351,35 +352,35 @@ mod tests {
     #[test]
     fn test_avm_blank_key() {
         run_wasm_test(
-            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_blank_key.wasm",
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_blank_key.wasm",
         );
     }
 
     #[test]
     fn test_avm_complex() {
         run_wasm_test(
-            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_complex.wasm",
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_complex.wasm",
         );
     }
 
     #[test]
     fn test_avm_fibo() {
         run_wasm_test(
-            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/fibo.wasm",
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/fibo.wasm",
         );
     }
 
     #[test]
     fn test_avm_ret_1() {
         run_wasm_test(
-            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/ret_1.wasm",
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/ret_1.wasm",
         );
     }
 
     #[test]
     fn test_avm_state_loop() {
         run_wasm_test(
-            "/Users/joe/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/state_loop.wasm",
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/state_loop.wasm",
         );
     }
 }

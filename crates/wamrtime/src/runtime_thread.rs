@@ -1,4 +1,4 @@
-use std::thread;
+use std::{ffi::c_char, thread};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
 
@@ -36,7 +36,7 @@ impl RuntimeThread {
         thread::spawn(move || {
             let _runtime = WamrRuntime::new(host_functions, runtime_heap_size)
                 .expect("Failed to create WamrRuntime");
-            let error_buf = &mut [0i8; crate::ERROR_BUFFER_SIZE];
+            let mut error_buf: [c_char; crate::ERROR_BUFFER_SIZE] = [0; crate::ERROR_BUFFER_SIZE];
 
             while let Ok(program_message) = prog_receiver.recv() {
                 match program_message {
