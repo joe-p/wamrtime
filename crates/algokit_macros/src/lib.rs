@@ -25,14 +25,15 @@ fn is_active_avm_type(ty: &Type) -> bool {
     }
 }
 
-/// Wraps a function that takes exactly one `ActiveAvm` parameter and generates:
+/// Wraps a function that takes exactly one `ActiveAvm` parameter and returns `Result<(), E>`.
+/// Generates:
 /// 1. A global allocator (when not in test mode)
 /// 2. A `program` entry point function that calls the wrapped function
 ///
 /// Example:
 /// ```ignore
 /// #[program_entry]
-/// fn state_loop(avm: ActiveAvm) -> u64 {
+/// fn state_loop(avm: ActiveAvm) -> Result<(), Error> {
 ///     // ...
 /// }
 /// ```
@@ -45,7 +46,10 @@ fn is_active_avm_type(ty: &Type) -> bool {
 ///
 /// #[unsafe(export_name = "program")]
 /// pub extern "C" fn program() -> u64 {
-///     state_loop(host_avm())
+///     match state_loop(alloc::boxed::Box::leak(alloc::boxed::Box::new(::algokit::HostAvm {}))) {
+///         Ok(()) => 1,
+///         Err(_) => avm_panic(),
+///     }
 /// }
 /// ```
 #[proc_macro_attribute]
@@ -57,8 +61,6 @@ pub fn program_entry(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_sig = &input_fn.sig;
     let fn_block = &input_fn.block;
     let fn_attrs = &input_fn.attrs;
-    let return_type = &fn_sig.output;
-
     // Check function has exactly one parameter
     if input_fn.sig.inputs.len() != 1 {
         return syn::Error::new_spanned(
@@ -96,8 +98,11 @@ pub fn program_entry(_attr: TokenStream, item: TokenStream) -> TokenStream {
         extern crate alloc;
 
         #[unsafe(export_name = "program")]
-        pub extern "C" fn program() #return_type {
-            #fn_name(alloc::boxed::Box::leak(alloc::boxed::Box::new(::algokit::HostAvm {})))
+        pub extern "C" fn program() -> u64 {
+            match #fn_name(alloc::boxed::Box::leak(alloc::boxed::Box::new(::algokit::HostAvm {}))) {
+                Ok(()) => 1,
+                Err(_) => ::algokit::avm_panic(),
+            }
         }
     };
 

@@ -1,4 +1,4 @@
-use algokit::{ActiveAvm, avm_panic, program_entry};
+use algokit::{ActiveAvm, program_entry};
 use dcap_qvl::quote::Quote;
 use sha2::{Digest, Sha384};
 
@@ -100,13 +100,13 @@ impl Event {
 const EVENT_COUNT: i32 = 10;
 
 #[program_entry]
-fn tee_dcap(avm: ActiveAvm) -> u64 {
+fn tee_dcap(avm: ActiveAvm) -> Result<(), ()> {
     let mut quote_bytes = [0u8; 128];
     if avm
         .read_global_bytes(0, b"quote", &mut quote_bytes)
         .is_err()
     {
-        avm_panic();
+        return Err(());
     }
 
     let mut event_digests = Vec::new();
@@ -114,7 +114,7 @@ fn tee_dcap(avm: ActiveAvm) -> u64 {
     for _ in 0..EVENT_COUNT {
         let mut buf = [0u8; 48];
         if avm.read_global_bytes(0, b"digests", &mut buf).is_err() {
-            avm_panic();
+            return Err(());
         }
         event_digests.push(buf);
     }
@@ -124,7 +124,7 @@ fn tee_dcap(avm: ActiveAvm) -> u64 {
         .read_global_bytes(0, b"compose_hash", &mut compose_hash)
         .is_err()
     {
-        avm_panic();
+        return Err(());
     }
 
     let mut app_id = [0u8; 256];
@@ -132,7 +132,7 @@ fn tee_dcap(avm: ActiveAvm) -> u64 {
         .read_global_bytes(0, b"phala_app_id", &mut app_id)
         .is_err()
     {
-        avm_panic();
+        return Err(());
     }
 
     // NOTE: Collateral verification is skipped in this guest code since we're not using a real TDX
@@ -177,5 +177,5 @@ fn tee_dcap(avm: ActiveAvm) -> u64 {
         "Report data is longer than 32 bytes"
     );
 
-    1
+    Ok(())
 }
