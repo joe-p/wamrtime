@@ -1,4 +1,4 @@
-use algokit::{ActiveAvm, program_entry};
+use algokit::{ActiveAvm, AlgokitError, program_entry};
 use dcap_qvl::quote::Quote;
 use sha2::{Digest, Sha384};
 
@@ -100,40 +100,24 @@ impl Event {
 const EVENT_COUNT: i32 = 10;
 
 #[program_entry]
-fn tee_dcap(avm: ActiveAvm) -> Result<(), ()> {
+fn tee_dcap(avm: ActiveAvm) -> Result<(), AlgokitError> {
     let mut quote_bytes = [0u8; 128];
-    if avm
-        .read_global_bytes(0, b"quote", &mut quote_bytes)
-        .is_err()
-    {
-        return Err(());
-    }
+    avm.read_global_bytes(0, b"quote", &mut quote_bytes)?;
 
     let mut event_digests = Vec::new();
 
     for _ in 0..EVENT_COUNT {
         let mut buf = [0u8; 48];
-        if avm.read_global_bytes(0, b"digests", &mut buf).is_err() {
-            return Err(());
-        }
+        avm.read_global_bytes(0, b"digests", &mut buf)?;
+
         event_digests.push(buf);
     }
 
     let mut compose_hash = [0u8; 256];
-    if avm
-        .read_global_bytes(0, b"compose_hash", &mut compose_hash)
-        .is_err()
-    {
-        return Err(());
-    }
+    avm.read_global_bytes(0, b"compose_hash", &mut compose_hash)?;
 
     let mut app_id = [0u8; 256];
-    if avm
-        .read_global_bytes(0, b"phala_app_id", &mut app_id)
-        .is_err()
-    {
-        return Err(());
-    }
+    avm.read_global_bytes(0, b"phala_app_id", &mut app_id)?;
 
     // NOTE: Collateral verification is skipped in this guest code since we're not using a real TDX
     // server yet
