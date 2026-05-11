@@ -1,4 +1,4 @@
-use algokit::{avm_panic, read_global_bytes};
+use algokit::{ActiveAvm, avm_panic, program_entry};
 use dcap_qvl::quote::Quote;
 use sha2::{Digest, Sha384};
 
@@ -99,10 +99,13 @@ impl Event {
 
 const EVENT_COUNT: i32 = 10;
 
-#[unsafe(export_name = "program")]
-pub extern "C" fn program() -> u64 {
+#[program_entry]
+fn tee_dcap(avm: ActiveAvm) -> u64 {
     let mut quote_bytes = [0u8; 128];
-    if read_global_bytes(0, b"quote", &mut quote_bytes).is_err() {
+    if avm
+        .read_global_bytes(0, b"quote", &mut quote_bytes)
+        .is_err()
+    {
         avm_panic();
     }
 
@@ -110,19 +113,25 @@ pub extern "C" fn program() -> u64 {
 
     for _ in 0..EVENT_COUNT {
         let mut buf = [0u8; 48];
-        if read_global_bytes(0, b"digests", &mut buf).is_err() {
+        if avm.read_global_bytes(0, b"digests", &mut buf).is_err() {
             avm_panic();
         }
         event_digests.push(buf);
     }
 
     let mut compose_hash = [0u8; 256];
-    if read_global_bytes(0, b"compose_hash", &mut compose_hash).is_err() {
+    if avm
+        .read_global_bytes(0, b"compose_hash", &mut compose_hash)
+        .is_err()
+    {
         avm_panic();
     }
 
     let mut app_id = [0u8; 256];
-    if read_global_bytes(0, b"phala_app_id", &mut app_id).is_err() {
+    if avm
+        .read_global_bytes(0, b"phala_app_id", &mut app_id)
+        .is_err()
+    {
         avm_panic();
     }
 

@@ -29,6 +29,18 @@ dependencies = [
 [[package]]
 name = "algokit"
 version = "0.1.0"
+dependencies = [
+ "algokit_macros",
+]
+
+[[package]]
+name = "algokit_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "anyhow"
@@ -535,6 +547,9 @@ dependencies = [
 [[package]]
 name = "fibo"
 version = "0.1.0"
+dependencies = [
+ "algokit",
+]
 
 [[package]]
 name = "fibo_7"
@@ -1069,6 +1084,9 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 [[package]]
 name = "ret_1"
 version = "0.1.0"
+dependencies = [
+ "algokit",
+]
 
 [[package]]
 name = "ring"

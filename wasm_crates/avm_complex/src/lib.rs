@@ -1,36 +1,34 @@
 #![no_std]
 
-extern crate alloc;
+use algokit::{ActiveAvm, GlobalBytes, GlobalUint, avm_panic, program_entry};
 
-use algokit::{GlobalBytes, GlobalUint, avm_panic};
+#[program_entry]
+fn avm_complex(avm: ActiveAvm) -> u64 {
+    let g_uint: GlobalUint = GlobalUint::new(avm, b"foo");
+    let g_bytes: GlobalBytes = GlobalBytes::new(avm, b"foo");
 
-const GLOBAL_UINT: GlobalUint = GlobalUint::new(b"foo");
-const GLOBAL_BYTES: GlobalBytes = GlobalBytes::new(b"foo");
-
-#[unsafe(export_name = "program")]
-pub extern "C" fn program() -> u64 {
-    let val = GLOBAL_UINT.get();
+    let val = g_uint.get();
     if val != 0 {
         avm_panic();
     }
 
-    GLOBAL_UINT.set(7);
-    let new_val = GLOBAL_UINT.get();
+    g_uint.set(7);
+    let new_val = g_uint.get();
     if new_val != 7 {
         avm_panic();
     }
 
-    GLOBAL_BYTES.write(b"hello AVM!");
+    g_bytes.write(b"hello AVM!");
 
     let buf = &mut [0u8; 128];
-    let retrieved_value = GLOBAL_BYTES.read(buf);
+    let retrieved_value = g_bytes.read(buf);
 
     if retrieved_value != b"hello AVM!".as_slice() {
         avm_panic();
     }
 
-    GLOBAL_UINT.set(0);
-    GLOBAL_BYTES.write(&[]);
+    g_uint.set(0);
+    g_bytes.write(&[]);
 
     0
 }

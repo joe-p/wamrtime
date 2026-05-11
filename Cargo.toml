@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/algokit_macros",
     "crates/wamrtime-avm-bindgen",
     "crates/wamrtime",
     "crates/wamrtime_avm",
