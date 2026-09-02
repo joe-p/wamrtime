@@ -1,0 +1,7 @@
+[package]
+name = "algokit"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+algokit_macros = { path = "../algokit_macros" }

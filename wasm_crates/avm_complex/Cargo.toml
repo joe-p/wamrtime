@@ -1,0 +1,10 @@
+[package]
+name = "avm_complex"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+algokit = { version = "0.1.0", path = "../../crates/algokit" }

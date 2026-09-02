@@ -1,0 +1,15 @@
+[package]
+name = "tee_dcap"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+algokit = { version = "0.1.0", path = "../../crates/algokit" }
+dcap-qvl = { version = "0.3.11", default-features = false, features = ["std", "ring"] }
+
+# dcap-qvl pulls in getrandom 0.2 which needs the js feature for wasm targets
+get_random = { package = "getrandom", version = "0.2", features = ["js"] }
+sha2 = "0.11.0"

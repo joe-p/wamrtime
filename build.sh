@@ -2,7 +2,6 @@
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WAMR_DIR=${ROOT}/wasm-micro-runtime
-OUT_DIR=${ROOT}/zig-out/bin
 set -ex
 
 cd ${ROOT}
@@ -28,6 +27,12 @@ make vmlib
 
 cd ${ROOT}
 
-zig build
+# for each directory in wasm_crates, build the wasm module
+for dir in wasm_crates/*/; do
+    (cd "$dir" && cargo build --profile wasm_small --target wasm32-unknown-unknown)
+done
 
-cargo t
+cargo build --workspace --exclude avm_complex --exclude avm_blank_key --exclude state_loop
+
+cargo run -p wamrtime-avm-bindgen -- /home/joe.guest/git/algorand/go-algorand/wamrtime/crates/wamrtime_avm/src/lib.rs /home/joe.guest/git/algorand/go-algorand/data/transactions/logic/wamrtime.go
+ 

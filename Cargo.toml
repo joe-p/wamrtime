@@ -1,5 +1,23 @@
 [workspace]
 resolver = "3"
-members = [ "crates/wamrtime-avm-bindgen",
-    "crates/wamrtime", "crates/wamrtime_avm",
+members = [
+    "crates/algokit_macros",
+    "crates/wamrtime-avm-bindgen",
+    "crates/wamrtime",
+    "crates/wamrtime_avm",
+    "wasm_crates/avm_complex",
+    "wasm_crates/avm_blank_key", "crates/algokit", "wasm_crates/fibo", "wasm_crates/ret_1", "wasm_crates/state_loop", "wasm_crates/fibo_7", "wasm_crates/tee_dcap"
 ]
+
+[profile.wasm_dev]
+inherits = "dev"
+panic = "abort"
+
+[profile.wasm_small]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+

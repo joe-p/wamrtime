@@ -1,14 +1,52 @@
+use std::ffi::c_char;
 use std::ffi::c_void;
 use std::ops::Deref;
-use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex, OnceLock};
-use std::time::Instant;
+use std::sync::LazyLock;
 
-use wamrtime::compiler::Compiler;
-use wamrtime::evaluator::Evaluator;
-use wamrtime::runtime::{WamrHostFunction, WamrRuntime, WamrType};
+use wamrtime::ERROR_BUFFER_SIZE;
+use wamrtime::program::ProgramConfig;
+use wamrtime::{
+    runtime::{WamrHostFunction, WamrType},
+    runtime_thread::RuntimeThread,
+};
 
-static mut AVM_CTX: *mut c_void = core::ptr::null_mut();
+const KB: usize = 1024;
+const MAX_PROGRAM_SIZE: usize = 8 * KB;
+const MAX_PROGRAM_DEPTH: usize = 256;
+
+/// The size of the heap that the RUNTIME will use. This is separate from the module's linear
+/// memory and is used for things like instantiated programs.
+const RUNTIME_HEAP_SIZE: usize = (MAX_PROGRAM_SIZE + 1) * MAX_PROGRAM_DEPTH;
+
+/// The WASM execution stack size. Note that most languages will use their own stack within linear memory.
+const STACK_SIZE: u32 = 16 * KB as u32;
+
+/// The managed heap is ADDED to the linear memory of the WASM module before defined __heap_base.
+const MANAGED_HEAP_SIZE: usize = 128 * KB;
+
+/// The maximum number of memory pages (64KB each) that a module can have. This is BEFORE adding the managed heap.
+/// The total possible memory size is (MAX_MODULE_PAGES * 64KB) + MANAGED_HEAP_SIZE.
+const MAX_MODULE_PAGES: u32 = 2;
+
+/// A pointer to a Go handle that contains a *EvalContext
+static mut AVM_EVAL_CTX: *mut c_void = core::ptr::null_mut();
+
+const INSTRUCTION_COUNT_LIMIT: i32 = 10_000_000;
+
+static AVM_RUNTIME_THREAD: LazyLock<RuntimeThread> = LazyLock::new(|| {
+    let program_config = ProgramConfig {
+        error_buf: [0; ERROR_BUFFER_SIZE],
+        stack_size: STACK_SIZE,
+        app_heap_size: MANAGED_HEAP_SIZE,
+        max_pages: MAX_MODULE_PAGES,
+        instruction_count_limit: INSTRUCTION_COUNT_LIMIT,
+    };
+    RuntimeThread::new(
+        AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
+        RUNTIME_HEAP_SIZE,
+        program_config,
+    )
+});
 
 macro_rules! avm_host_functions {
     (
@@ -33,7 +71,7 @@ macro_rules! avm_host_functions {
                     let impl_fn = unsafe {
                         [<$fn_name:snake:upper _IMPL>].expect(concat!("AVM ", stringify!($fn_name), " not set"))
                     };
-                    let ctx = unsafe { AVM_CTX };
+                    let ctx = unsafe { AVM_EVAL_CTX };
                     unsafe { impl_fn(exec_env, ctx, $($arg_name),*) }
                 }
             }
@@ -42,15 +80,11 @@ macro_rules! avm_host_functions {
         ::paste::paste! {
             #[unsafe(no_mangle)]
             pub extern "C" fn avm_init(
-                ctx: *mut ::std::ffi::c_void,
                 $([<$fn_name _impl>]: [<$fn_name:camel Fn>]),*
             ) {
+                let _ = AVM_RUNTIME_THREAD.deref();
+
                 unsafe {
-                    // TODO: Eventually add this back in
-                    // if !AVM_CTX.is_null() {
-                    //     panic!("AVM context already set");
-                    // }
-                    AVM_CTX = ctx;
                     $(
                         [<$fn_name:snake:upper _IMPL>] = Some([<$fn_name _impl>]);
                     )*
@@ -63,18 +97,27 @@ macro_rules! avm_host_functions {
 avm_host_functions! {
     avm_get_global_uint(app: u64, key_ptr: *const u8, key_len: u32) -> u64;
     avm_set_global_uint(app: u64, key_ptr: *const u8, key_len: u32, value: u64);
+    avm_get_global_bytes(app: u64, key_ptr: *const u8, key_len: u32, dest_ptr: *mut u8, dest_len: u32) -> i32;
+    avm_set_global_bytes(app: u64, key_ptr: *const u8, key_len: u32, src_ptr: *const u8, src_len: u32);
+    avm_get_global_var_uint(field_index: u64) -> u64;
 }
 
 enum AvmType {
     U64,
-    Bytes,
+    App,
+    ByteSlice,
+    BytesLen,
+    MutByteSlice,
 }
 
 impl From<&AvmType> for wamrtime::runtime::WamrType {
     fn from(avm_type: &AvmType) -> Self {
         match avm_type {
             AvmType::U64 => wamrtime::runtime::WamrType::I64,
-            AvmType::Bytes => wamrtime::runtime::WamrType::ByteSlice,
+            AvmType::App => wamrtime::runtime::WamrType::I64,
+            AvmType::BytesLen => wamrtime::runtime::WamrType::I32,
+            AvmType::ByteSlice => wamrtime::runtime::WamrType::ByteSlice,
+            AvmType::MutByteSlice => wamrtime::runtime::WamrType::MutByteSlice,
         }
     }
 }
@@ -102,133 +145,80 @@ impl From<&AvmFunction> for wamrtime::runtime::WamrHostFunction {
 const AVM_FUNCTIONS: &[AvmFunction] = &[
     AvmFunction {
         name: "avm_get_global_uint",
-        args: &[AvmType::U64, AvmType::Bytes],
+        args: &[AvmType::App, AvmType::ByteSlice],
         returns: Some(AvmType::U64),
         host_func: avm_get_global_uint as *mut c_void,
     },
     AvmFunction {
         name: "avm_set_global_uint",
-        args: &[AvmType::U64, AvmType::Bytes, AvmType::U64],
+        args: &[AvmType::App, AvmType::ByteSlice, AvmType::U64],
         returns: None,
         host_func: avm_set_global_uint as *mut c_void,
     },
+    AvmFunction {
+        name: "avm_get_global_bytes",
+        args: &[AvmType::App, AvmType::ByteSlice, AvmType::MutByteSlice],
+        returns: Some(AvmType::BytesLen),
+        host_func: avm_get_global_bytes as *mut c_void,
+    },
+    AvmFunction {
+        name: "avm_set_global_bytes",
+        args: &[AvmType::App, AvmType::ByteSlice, AvmType::ByteSlice],
+        returns: None,
+        host_func: avm_set_global_bytes as *mut c_void,
+    },
+    AvmFunction {
+        name: "avm_get_global_var_uint",
+        args: &[AvmType::U64],
+        returns: Some(AvmType::U64),
+        host_func: avm_get_global_var_uint as *mut c_void,
+    },
 ];
 
-const GAS_LIMIT: i64 = 1_000_000;
-static mut GAS_USED: i64 = 0;
-
 #[unsafe(no_mangle)]
-pub extern "C" fn host_gas_check_impl(_exec_env: *mut c_void, requested_gas: i64) {
+pub extern "C" fn avm_set_ctx(ctx: *mut c_void) {
     unsafe {
-        GAS_USED += requested_gas;
-        if GAS_USED > GAS_LIMIT {
-            panic!("Out of gas");
-        }
+        AVM_EVAL_CTX = ctx;
     }
 }
 
-static RUNTIME: LazyLock<WamrRuntime> = LazyLock::new(|| {
-    WamrRuntime::new(
-        host_gas_check_impl,
-        AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
-    )
-});
-
-static EVALUATOR: OnceLock<Mutex<Evaluator>> = OnceLock::new();
-
-// TODO: Put this in avm_init?
+/// # Safety
+/// We assume the exec_env and msg_ptr are valid pointers.
 #[unsafe(no_mangle)]
-pub extern "C" fn avm_init_eval() {
-    if EVALUATOR.get().is_some() {
-        return;
-    }
-    let runtime = RUNTIME.deref();
-    let evaluator = Evaluator::new(runtime);
-    if EVALUATOR.set(Mutex::new(evaluator)).is_err() {
-        panic!("Evaluator already initialized");
+pub unsafe extern "C" fn avm_set_exception(
+    exec_env: *mut wamrtime::wamr::WASMExecEnv,
+    msg_ptr: *const c_char,
+) {
+    let module_inst = unsafe { wamrtime::wamr::wasm_runtime_get_module_inst(exec_env) };
+    unsafe {
+        wamrtime::wamr::wasm_runtime_set_exception(module_inst, msg_ptr);
     }
 }
 
+/// # Safety
+/// We assume the program_bytes_ptr is a valid pointer to program_bytes_len bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn test_avm_prep_round() {
-    let runtime = RUNTIME.deref();
-    let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm.wasm");
-    let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-    let compiler = Compiler::new(runtime);
-    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
-
-    let aot_bytes_vec = vec![aot_bytes.clone()];
-
-    let mut evaluator = EVALUATOR
-        .get()
-        .expect("Evaluator not initialized")
-        .lock()
-        .unwrap();
-
-    evaluator
-        .next_round(aot_bytes_vec)
-        .expect("Initial round failed");
-
-    evaluator.wait_for_init().expect("Evaluator init failed");
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn test_avm_run_program() {
-    let evaluator = EVALUATOR
-        .get()
-        .expect("Evaluator not initialized")
-        .lock()
-        .unwrap();
-
-    evaluator
-        ._test_only_call_next(0)
-        .expect("Program call failed");
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn test_run() {
-    let runtime = WamrRuntime::new(
-        host_gas_check_impl,
-        AVM_FUNCTIONS.iter().map(WamrHostFunction::from).collect(),
-    );
-
-    let wasm_path = PathBuf::from("/Users/joe/git/joe-p/wamrtime/zig-out/bin/avm.wasm");
-    let mut wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
-    let compiler = Compiler::new(&runtime);
-    let aot_bytes = compiler.compile_wasm(&mut wasm_bytes);
-
-    let mut evaluator = Evaluator::new(&runtime);
-
-    let aot_bytes_vec = vec![aot_bytes.clone()];
-
-    evaluator
-        .next_round(aot_bytes_vec.clone())
-        .expect("Initial round failed");
-
-    for i in 0..11 {
-        println!("\nIteration {}:", i + 1);
-        evaluator
-            .next_round(aot_bytes_vec.clone())
-            .expect("Round failed");
-    }
-
-    println!("\nFinal Iteration:");
-    let start = Instant::now();
-    evaluator
-        .next_round(aot_bytes_vec)
-        .expect("Final round failed");
-    let duration = start.elapsed();
-    println!("Final iteration executed in {} ns", duration.as_nanos());
-
-    println!("All iterations completed successfully.");
+pub unsafe extern "C" fn avm_call_program(
+    program_bytes_ptr: *const u8,
+    program_bytes_len: u64,
+) -> u64 {
+    let program_bytes =
+        unsafe { std::slice::from_raw_parts(program_bytes_ptr, program_bytes_len as usize) }
+            .to_vec();
+    AVM_RUNTIME_THREAD
+        .call_program(program_bytes)
+        .expect("Failed to run program")
 }
 
 #[cfg(test)]
 mod tests {
     use std::{
         collections::HashMap,
+        path::PathBuf,
         sync::{LazyLock, Mutex},
     };
+
+    use std::time::Instant;
 
     use super::*;
 
@@ -237,7 +227,10 @@ mod tests {
         println!("Hello from Rust!");
     }
 
-    static GLOBAL_STATE: LazyLock<Mutex<HashMap<Vec<u8>, u64>>> =
+    static GLOBAL_STATE_UINTS: LazyLock<Mutex<HashMap<Vec<u8>, u64>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    static GLOBAL_STATE_BYTES: LazyLock<Mutex<HashMap<Vec<u8>, Vec<u8>>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
 
     #[unsafe(no_mangle)]
@@ -249,7 +242,7 @@ mod tests {
         key_len: u32,
     ) -> u64 {
         let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
-        let state = GLOBAL_STATE.lock().unwrap();
+        let state = GLOBAL_STATE_UINTS.lock().unwrap();
         *state.get(&key).unwrap_or(&0)
     }
 
@@ -263,17 +256,131 @@ mod tests {
         value: u64,
     ) {
         let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
-        let mut state = GLOBAL_STATE.lock().unwrap();
+        let mut state = GLOBAL_STATE_UINTS.lock().unwrap();
         state.insert(key, value);
     }
 
-    #[test]
-    fn test_avm() {
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rust_impl_get_global_bytes(
+        _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+        _ctx: *mut c_void,
+        _app: u64,
+        key_ptr: *const u8,
+        key_len: u32,
+        dst_ptr: *mut u8,
+        dest_len: u32,
+    ) -> i32 {
+        let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
+        let state = GLOBAL_STATE_BYTES.lock().unwrap();
+        if let Some(value) = state.get(&key) {
+            if dest_len < value.len() as u32 {
+                return -1;
+            }
+            unsafe {
+                std::ptr::copy_nonoverlapping(value.as_ptr(), dst_ptr, value.len());
+            }
+            value.len() as i32
+        } else {
+            0
+        }
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rust_impl_set_global_bytes(
+        _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+        _ctx: *mut c_void,
+        _app: u64,
+        key_ptr: *const u8,
+        key_len: u32,
+        src_ptr: *const u8,
+        src_len: u32,
+    ) {
+        let key = unsafe { std::slice::from_raw_parts(key_ptr, key_len as usize) }.to_vec();
+        let value = unsafe { std::slice::from_raw_parts(src_ptr, src_len as usize) }.to_vec();
+        let mut state = GLOBAL_STATE_BYTES.lock().unwrap();
+        state.insert(key, value);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rust_impl_avm_get_global_var_uint(
+        _exec_env: *mut wamrtime::wamr::WASMExecEnv,
+        _ctx: *mut c_void,
+        field_index: u64,
+    ) -> u64 {
+        match field_index {
+            8 => 42, // CurrentApplicationID
+            _ => panic!("Unknown global field index {}", field_index),
+        }
+    }
+
+    fn run_wasm_test(wasm_file: &str) {
         avm_init(
-            std::ptr::null_mut(),
             rust_impl_get_global_uint,
             rust_impl_set_global_uint,
+            rust_impl_get_global_bytes,
+            rust_impl_set_global_bytes,
+            rust_impl_avm_get_global_var_uint,
         );
-        test_run();
+
+        let wasm_path = PathBuf::from(wasm_file);
+
+        let wasm_bytes = std::fs::read(wasm_path).expect("Failed to read WASM file");
+
+        let mut times = Vec::new();
+
+        for _ in 0..1000 {
+            let program_bytes = wasm_bytes.clone();
+            let start = Instant::now();
+            AVM_RUNTIME_THREAD
+                .call_program(program_bytes)
+                .expect("Failed to run program");
+
+            let duration = start.elapsed();
+            times.push(duration);
+        }
+
+        let avg = times.iter().sum::<std::time::Duration>() / (times.len() as u32);
+        println!("Average execution time: {:?}", avg);
+        let min = times.iter().min().unwrap();
+        println!("Minimum execution time: {:?}", min);
+        let max = times.iter().max().unwrap();
+        println!("Maximum execution time: {:?}", max);
+
+        println!("All iterations completed successfully.");
+    }
+
+    #[test]
+    fn test_avm_blank_key() {
+        run_wasm_test(
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_blank_key.wasm",
+        );
+    }
+
+    #[test]
+    fn test_avm_complex() {
+        run_wasm_test(
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/avm_complex.wasm",
+        );
+    }
+
+    #[test]
+    fn test_avm_fibo() {
+        run_wasm_test(
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/fibo.wasm",
+        );
+    }
+
+    #[test]
+    fn test_avm_ret_1() {
+        run_wasm_test(
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/ret_1.wasm",
+        );
+    }
+
+    #[test]
+    fn test_avm_state_loop() {
+        run_wasm_test(
+            "/home/joe.guest/git/joe-p/wamrtime/target/wasm32-unknown-unknown/wasm_small/state_loop.wasm",
+        );
     }
 }
